@@ -73,7 +73,7 @@ export default function LoginScreen() {
       await AsyncStorage.setItem('user', JSON.stringify(user)); // Stringify the user object
       
       // Make authenticated request (optional, if you need to verify the token)
-      await axios.get('http://localhost:3000/users', {
+      await axios.get('http://192.168.29.187:3000/users', {
         headers: { Authorization: `Bearer ${token}` },
       });
       
@@ -149,10 +149,11 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </LinearGradient>
 
-
+         
           <Text style={styles.registerText}>
             Don't have an account? <Text style={styles.registerLink} onPress={() => router.push('/RegisterScreen')} >Register</Text>
           </Text>
+          
         </View>
       </View>
     </>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, Dimensions, ScrollView, Platform
+  StyleSheet, Dimensions, ScrollView, Platform,Alert
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
@@ -38,10 +38,16 @@ const RegisterScreen = () => {
   const handleRegister = async (data: Object) => {
     console.log('Register button pressed'); // Debugging
     try {
-      const response = await axios.post("http://localhost:3000/users/register", data)
+      const response = await axios.post("http://192.168.29.187:3000/users/register", data)
       console.log(response.data); // Handle success response
-    } catch (error) {
+       Alert.alert('Registration Successful', 'Your account has been created successfully.');
+         router.push('/');
+    } 
+    
+    
+    catch (error) {
       console.log("error", error)
+       Alert.alert('Registration Failed', 'Something went wrong. Please try again.');
     }
   }
 
@@ -192,7 +198,6 @@ const RegisterScreen = () => {
             if (validateForm()) {
               console.log('Form is valid:', formData);
               handleRegister({ ...formData, gender, image });
-
             }
           }}
         >
@@ -296,7 +301,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   registerText: {
-    color: '#000',
+    color: '#fff',
     fontWeight: 'bold',
   },
   signInLink: {

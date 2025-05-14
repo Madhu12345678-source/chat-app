@@ -1,13 +1,13 @@
-import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
-import { io, Socket } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
+import { io, Socket } from 'socket.io-client';
 
 // Define your API base URL based on environment
 const API_BASE_URL = __DEV__ 
   ? Platform.OS === 'android' 
-    ? 'http://10.0.2.2:3000' // Android emulator uses 10.0.2.2 to access host machine
+    ? 'http://192.168.29.187:3000' // Android emulator uses 10.0.2.2 to access host machine
     : 'http://localhost:3000' // iOS simulator uses localhost
   : 'https://your-production-server.com'; // Replace with your actual production URL
 
@@ -193,91 +193,133 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  // Send a new message
-  const sendMessage = useCallback(
-    async (text: string, file?: { uri: string; name: string; type: string }) => {
-      if (!currentChat || !socketRef.current) {
-        console.log('Cannot send message: missing currentChat or socket');
-        return;
-      }
-  
-      try {
-        const token = await AsyncStorage.getItem('token');
-        const userData = await AsyncStorage.getItem('user');
-        const currentUser = userData ? JSON.parse(userData) : null;
+  // Send a new 
+// Send a new message
+const sendMessage = useCallback(
+  async (
+    text: string, 
+    file?: { uri: string; name: string; type: string }
+  ) => {
+    if (!currentChat || !socketRef.current) return;
+
+    console.log(text,"text")
+
+    try {
+      const token = await AsyncStorage.getItem('token');
+      const userData = await AsyncStorage.getItem('user');
+      const currentUser = userData ? JSON.parse(userData) : null;
+
+      console.log(currentUser)
+      
+      if (!currentUser?._id) throw new Error('Current user not found');
+
+      let fileUrl = '';
+      let fileName = '';
+      let fileType = '';
+      
+      // Handle file upload if present
+      if (file && file.uri) {
+        console.log('Preparing file upload:', file);
         
-        if (!currentUser?._id) {
-          throw new Error('Current user not found');
-        }
-  
-        let fileUrl = '';
-        let fileName = '';
-        let fileType = '';
+        // Mobile-specific file preparation
+        const formData = new FormData();
         
-        if (file) {
-          console.log('Uploading file:', file.name);
-          const formData = new FormData();
-          formData.append('file', {
-            uri: file.uri,
-            name: file.name,
-            type: file.type,
-          } as any);
-  
-          const uploadResponse = await axios.post(`${API_BASE_URL}/upload/file`, formData, {
-            headers: {
-              'Content-Type': 'multipart/form-data',
-              'Authorization': `Bearer ${token}`,
-            },
-          });
-  
-          if (uploadResponse.status !== 201) {
-            throw new Error('File upload failed');
-          }
-  
-          fileUrl = uploadResponse.data.fileUrl;
-          fileName = uploadResponse.data.fileName;
-          fileType = uploadResponse.data.fileType;
-          console.log('File uploaded successfully:', fileUrl);
+        // Extract filename from URI if not provided
+        const filename = file.name || file.uri.split('/').pop() || `file-${Date.now()}`;
+        
+        // Determine file type if not provided
+        const filetype = file.type || getMimeType(filename);
+        
+        formData.append('file', {
+          uri: file.uri,
+          name: filename,
+          type: filetype,
+        } as any);
+
+        console.log('FormData prepared:', formData);
+        
+        const uploadResponse = await axios.post(`${API_BASE_URL}/upload/file`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            'Authorization': `Bearer ${token}`,
+          },
+          transformRequest: () => formData, // Bypass Axios serialization
+        });
+
+        if (uploadResponse.status !== 201) {
+          throw new Error('File upload failed');
         }
-  
-        const messageData = {
-          senderId: currentUser._id,
-          receiverId: currentChat._id,
-          text,
-          ...(fileUrl && {
-            fileUrl,
-            fileName,
-            fileType,
-          }),
-        };
-  
-        console.log('Sending message:', messageData);
-        socketRef.current.emit('send_message', messageData);
-  
-        // Create optimistic message
-        const optimisticMessage: Message = {
-          _id: `temp-${Date.now()}`,
-          sender: currentUser._id,
-          receiver: currentChat._id,
-          text,
-          ...(fileUrl && {
-            fileUrl,
-            fileName,
-            fileType,
-          }),
-          status: 'sent',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-  
-        setMessages((prev) => [...prev, optimisticMessage]);
-      } catch (err) {
-        console.error('Error sending message:', err);
-        setError('Failed to send message');
+
+        fileUrl = uploadResponse.data.fileUrl;
+        fileName = uploadResponse.data.fileName;
+        fileType = uploadResponse.data.fileType;
       }
-    },
-    [currentChat]
-  );
+
+      // Prepare message payload
+      const messagePayload = {
+        sender: currentUser._id,
+        receiver: currentChat._id,
+        text: text || '',
+        ...(fileUrl && { 
+          fileUrl, 
+          fileName, 
+          fileType 
+        }),
+        status: 'sent' as const,
+        createdAt: new Date().toISOString(),
+      };
+
+      // Emit message to socket
+      socketRef.current.emit('send_message', {
+        ...messagePayload,
+        _id: `temp-${Date.now()}`, // Temporary ID
+      });
+
+      // Optimistically add message to local state
+      setMessages((prev) => [...prev, {
+        ...messagePayload,
+        _id: `temp-${Date.now()}`,
+        updatedAt: new Date().toISOString(), // Add placeholder for updatedAt
+      }]);
+
+    } catch (err) {
+      console.error('Error in sendMessage:', err);
+      
+      // More detailed error handling
+      if (axios.isAxiosError(err)) {
+        if (err.response) {
+          // The request was made and the server responded with a status
+          // code that falls out of the range of 2xx
+          throw new Error(err.response.data?.message || 'File upload failed');
+        } else if (err.request) {
+          // The request was made but no response was received
+          throw new Error('No response from server. Check your internet connection.');
+        } else {
+          // Something happened in setting up the request that triggered an Error
+          throw new Error('Error preparing message upload');
+        }
+      }
+      
+      throw err;
+    }
+  },
+  [currentChat]
+);
+
+// Helper function to guess MIME type from filename
+function getMimeType(filename: string): string {
+  const ext = filename.split('.').pop()?.toLowerCase();
+  switch (ext) {
+    case 'jpg': case 'jpeg': return 'image/jpeg';
+    case 'png': return 'image/png';
+    case 'gif': return 'image/gif';
+    case 'mp4': return 'video/mp4';
+    case 'pdf': return 'application/pdf';
+    case 'doc': return 'application/msword';
+    case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    default: return 'application/octet-stream';
+  }
+}
 
   // Mark a message as read
   const markAsRead = useCallback(
