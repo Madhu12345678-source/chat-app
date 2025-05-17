@@ -123,8 +123,22 @@ export default function ChatScreen() {
       setIsSending(false);
     }
   };
+  const handleProfileNavigation = () => {
+     console.log("Avatar clicked: navigating to profile screen");
+    router.push({
+      pathname: "/ProfileScreen",
+      params: { 
+        id: id as string, 
+        name: name as string, 
+        avatar: avatar as string,
+        time: new Date().toLocaleTimeString()
+      }
+    });
+  };
 
-  const isOnline = onlineUsers.includes(id as string);
+  // const isOnline = onlineUsers.includes(id as string);
+  const isOnline = !!onlineUsers?.includes(id?.toString());
+
 
   // Debug socket connection
   const debugConnection = () => {
@@ -142,7 +156,7 @@ export default function ChatScreen() {
           <Ionicons name="arrow-back" size={24} color="black" style={styles.backIcon} />
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={debugConnection}>
+        <TouchableOpacity onPress={handleProfileNavigation }>
           <Image
             source={{
               uri: avatar
@@ -164,6 +178,7 @@ export default function ChatScreen() {
           ]}>
             {isOnline ? "Online" : "Offline"}
           </Text>
+          
         </View>
 
         <View style={styles.headerIcons}>
@@ -237,8 +252,9 @@ export default function ChatScreen() {
                 {/* Message metadata */}
                 <Text style={styles.messageStatus}>
                   {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                   {item.status === 'delivered' && ' ✓'}
                   {item.status === 'read' && ' ✓✓'}
-                  {item.status === 'delivered' && ' ✓'}
+                 
                 </Text>
               </View>
             )}
@@ -436,3 +452,4 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 });
+

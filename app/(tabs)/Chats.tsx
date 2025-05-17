@@ -169,7 +169,7 @@ export default function ChatListScreen() {
                 ...chat,
                 unread: true,
                 message: newMessage.text || "New message",
-                time: "Just now"
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) // e.g., "04:35 PM"
               };
             }
             return chat;
