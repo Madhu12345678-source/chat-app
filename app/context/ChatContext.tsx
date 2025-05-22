@@ -5,8 +5,8 @@ import { Platform } from 'react-native';
 import { io, Socket } from 'socket.io-client';
 
 // Define your API base URL based on environment
-const API_BASE_URL = __DEV__ 
-  ? Platform.OS === 'android' 
+const API_BASE_URL = __DEV__
+  ? Platform.OS === 'android'
     ? 'http://192.168.29.187:3000' // Android emulator uses this IP to access host machine
     : 'http://localhost:3000' // iOS simulator uses localhost
   : 'https://your-production-server.com'; // Replace with your actual production URL
@@ -20,8 +20,9 @@ type Message = {
   fileName?: string;
   fileType?: string;
   status: 'sent' | 'delivered' | 'read';
-  createdAt: string;
-  updatedAt: string;
+  timestamp: string; // Changed from createdAt to timestamp
+  readAt?: string;
+  clearedBy?: string[];
 };
 
 type User = {
@@ -48,14 +49,14 @@ type ChatContextType = {
 const ChatContext = createContext<ChatContextType>({
   socket: null,
   currentChat: null,
-  setCurrentChat: () => {},
+  setCurrentChat: () => { },
   messages: [],
-  sendMessage: async () => {},
-  markAsRead: () => {},
+  sendMessage: async () => { },
+  markAsRead: () => { },
   onlineUsers: [],
   loadingMessages: false,
   error: null,
-  fetchMessages: async () => {},
+  fetchMessages: async () => { },
 });
 
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -66,23 +67,23 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
+  const pendingMessages = useRef<Set<string>>(new Set()); // Track pending messages
 
   // Initialize socket connection
   useEffect(() => {
     const initializeSocket = async () => {
       try {
-        // Get user data and token
         const token = await AsyncStorage.getItem('token');
         const userData = await AsyncStorage.getItem('user');
         const currentUser = userData ? JSON.parse(userData) : null;
-        
+
         if (!token || !currentUser?._id) {
           console.log('Missing token or user data');
           return;
         }
 
         console.log('Initializing socket connection to:', API_BASE_URL);
-        
+
         const newSocket = io(API_BASE_URL, {
           auth: { token },
           transports: ['websocket'],
@@ -95,14 +96,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         newSocket.on('connect', () => {
           console.log('Connected to socket server');
           setSocket(newSocket);
-          
-          // Important: Notify server of user connection
           newSocket.emit('user_connected', currentUser._id);
         });
 
         newSocket.on('disconnect', () => {
           console.log('Disconnected from socket server');
-          // Emit user_disconnected before the socket disconnects
           if (currentUser?._id) {
             newSocket.emit('user_disconnected', currentUser._id);
           }
@@ -113,33 +111,65 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setError('Failed to connect to chat server');
         });
 
-        // Listen for incoming messages - match server's event structure
+        // FIXED: Listen for incoming messages
         newSocket.on('receive_message', (data) => {
           console.log('Received message:', data);
           if (data.message) {
-            setMessages((prev) => [...prev, data.message]);
+            setMessages((prev) => {
+              // Avoid duplicates
+              const exists = prev.some(msg => msg._id === data.message._id);
+              if (exists) return prev;
+
+              return [...prev, data.message].sort((a, b) =>
+                new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+              );
+            });
           }
         });
 
-        // Listen for message status updates
+        // FIXED: Listen for message status updates
         newSocket.on('message_status_update', ({ messageId, status, readAt }) => {
-          console.log('Message status update:', { messageId, status, readAt });
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg._id === messageId ? { ...msg, status, ...(readAt && { readAt }) } : msg
-            )
-          );
+          console.log('Status update received:', { messageId, status, readAt });
+
+          setMessages((prevMessages) => {
+            return prevMessages.map((msg) => {
+              if (msg._id?.startsWith("temp")) {
+                return {
+                  ...msg,
+                  _id: messageId, // Replace temp ID with actual ID
+                };
+              }
+              return msg;
+            });
+          });
+
+          setMessages((prev) => {
+            const updated = prev.map((msg) => {
+              if (msg._id === messageId) {
+                console.log(`Updating message ${messageId}: ${msg.status} -> ${status}`);
+                return {
+                  ...msg,
+                  status,
+                  ...(readAt && { readAt })
+                };
+              }
+              return msg;
+            });
+
+            // Log the updated message to verify
+            const updatedMsg = updated.find(m => m._id === messageId);
+            console.log('Updated message:', updatedMsg);
+
+            return updated;
+          });
         });
 
         // Listen for online users updates
         newSocket.on('users_status_update', (users) => {
-          console.log('Users status update:', users);
           setOnlineUsers(users.filter((u: { _id: string; online: boolean }) => u.online).map((u: { _id: string }) => u._id));
         });
 
-        // Listen for user status changes
         newSocket.on('user_status_change', ({ userId, online }) => {
-          console.log('User status change:', { userId, online });
           if (online) {
             setOnlineUsers(prev => Array.from(new Set([...prev, userId])));
           } else {
@@ -147,15 +177,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         });
 
-        return () => {
-          if (socketRef.current) {
-            // Notify server before disconnecting
-            if (currentUser?._id) {
-              socketRef.current.emit('user_disconnected', currentUser._id);
-            }
-            socketRef.current.disconnect();
-          }
-        };
+        newSocket.on('message_error', (data) => {
+          console.error('Message error:', data);
+          setError(data.error || 'Failed to send message');
+        });
+
       } catch (err) {
         console.error('Socket initialization error:', err);
         setError('Failed to initialize chat connection');
@@ -170,7 +196,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setLoadingMessages(true);
       setError(null);
-      
+
       const token = await AsyncStorage.getItem('token');
       if (!token) {
         setError('Authentication required');
@@ -182,7 +208,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const response = await axios.get(`${API_BASE_URL}/messages/${userId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      
+
       console.log('Fetched messages count:', response.data?.length);
       setMessages(response.data);
       setLoadingMessages(false);
@@ -193,54 +219,56 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  // Send a new message
+
+
+  // FIXED: Send message function
   const sendMessage = useCallback(
     async (
-      text: string, 
+      text: string,
       file?: { uri: string; name: string; type: string }
     ) => {
-      if (!currentChat || !socketRef.current) return;
+      if (!currentChat || !socketRef.current) {
+        console.log('Cannot send message: missing chat or socket');
+        return;
+      }
 
-      console.log('Sending message:', text);
+      const messageText = text.trim();
+      if (!messageText && !file) {
+        console.log('Cannot send empty message');
+        return;
+      }
 
       try {
         const token = await AsyncStorage.getItem('token');
         const userData = await AsyncStorage.getItem('user');
         const currentUser = userData ? JSON.parse(userData) : null;
-        
+
         if (!currentUser?._id) throw new Error('Current user not found');
 
         let fileUrl = '';
         let fileName = '';
         let fileType = '';
-        
+
         // Handle file upload if present
         if (file && file.uri) {
-          console.log('Preparing file upload:', file);
-          
-          // Mobile-specific file preparation
+          console.log('Uploading file:', file);
+
           const formData = new FormData();
-          
-          // Extract filename from URI if not provided
           const filename = file.name || file.uri.split('/').pop() || `file-${Date.now()}`;
-          
-          // Determine file type if not provided
           const filetype = file.type || getMimeType(filename);
-          
+
           formData.append('file', {
             uri: file.uri,
             name: filename,
             type: filetype,
           } as any);
 
-          console.log('FormData prepared:', formData);
-          
           const uploadResponse = await axios.post(`${API_BASE_URL}/upload/file`, formData, {
             headers: {
               'Content-Type': 'multipart/form-data',
               'Authorization': `Bearer ${token}`,
             },
-            transformRequest: () => formData, // Bypass Axios serialization
+            transformRequest: () => formData,
           });
 
           if (uploadResponse.status !== 201) {
@@ -252,66 +280,100 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           fileType = uploadResponse.data.fileType;
         }
 
-        // Prepare message payload - MATCH THE SERVER EXPECTED FORMAT
+        const tempMessageId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
         const messagePayload = {
           senderId: currentUser._id,
           receiverId: currentChat._id,
-          text: text || '',
-          ...(fileUrl && { 
-            fileUrl, 
-            fileName, 
-            fileType 
-          })
+          text: messageText,
+          ...(fileUrl && { fileUrl, fileName, fileType })
         };
 
-        console.log('Emitting send_message with payload:', messagePayload);
-
-        // Emit message to socket
-        socketRef.current.emit('send_message', messagePayload);
-
-        // Optimistically add message to local state
-        const tempMessage = {
-          _id: `temp-${Date.now()}`,
+        // FIXED: Create optimistic message with correct timestamp field
+        const tempMessage: Message = {
+          _id: tempMessageId,
           sender: currentUser._id,
           receiver: currentChat._id,
-          text: text || '',
-          ...(fileUrl && { 
-            fileUrl, 
-            fileName, 
-            fileType 
-          }),
-          status: 'sent' as const,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
+          text: messageText,
+          ...(fileUrl && { fileUrl, fileName, fileType }),
+          status: 'sent',
+          timestamp: new Date().toISOString(), // Use timestamp instead of createdAt
         };
 
         setMessages((prev) => [...prev, tempMessage]);
+        socketRef.current.emit('send_message', messagePayload);
+
+        // Clean up pending message after 3 seconds
+        // setTimeout(() => {
+        //   pendingMessages.current.delete(messageKey);
+        // }, 3000);
 
       } catch (err) {
-        console.error('Error in sendMessage:', err);
-        
-        // More detailed error handling
+        console.error('Error sending message:', err);
+
+        // Remove failed message
+        setMessages((prev) => prev.filter(msg => !msg._id.startsWith('temp-')));
+
         if (axios.isAxiosError(err)) {
           if (err.response) {
-            // The request was made and the server responded with a status
-            // code that falls out of the range of 2xx
-            throw new Error(err.response.data?.message || 'File upload failed');
+            throw new Error(err.response.data?.message || 'Message send failed');
           } else if (err.request) {
-            // The request was made but no response was received
-            throw new Error('No response from server. Check your internet connection.');
-          } else {
-            // Something happened in setting up the request that triggered an Error
-            throw new Error('Error preparing message upload');
+            throw new Error('No response from server. Check your connection.');
           }
         }
-        
         throw err;
       }
     },
     [currentChat]
   );
 
-  // Helper function to guess MIME type from filename
+  // FIXED: Mark message as read
+  const markAsRead = useCallback(
+    (messageId: string, senderId: string) => {
+      if (!socketRef.current) {
+        console.log('Socket not available for markAsRead');
+        return;
+      }
+
+      const message = messages.find((m) => m._id === messageId);
+      if (!message) {
+        console.log('Message not found:', messageId);
+        return;
+      }
+
+      if (message.status === 'read') {
+        console.log('Message already read:', messageId);
+        return;
+      }
+
+      AsyncStorage.getItem('user').then(userData => {
+        const currentUser = userData ? JSON.parse(userData) : null;
+        if (!currentUser?._id) return;
+
+        // Only mark as read if we are the receiver
+        if (message.receiver === currentUser._id && message.sender !== currentUser._id) {
+          console.log('Emitting message_read for:', messageId);
+
+          // IMPORTANT: Update local state immediately to show read status
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg._id === messageId ? { ...msg, status: 'read', readAt: new Date().toISOString() } : msg
+            )
+          );
+
+          // Then notify server
+          socketRef.current?.emit('message_read', {
+            messageId,
+            readBy: currentUser._id,
+            senderId: message.sender,
+          });
+        }
+      });
+    },
+    [messages]
+  );
+
+  // Helper function for MIME types
   function getMimeType(filename: string): string {
     const ext = filename.split('.').pop()?.toLowerCase();
     switch (ext) {
@@ -325,40 +387,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       default: return 'application/octet-stream';
     }
   }
-
-  // Mark a message as read
-  const markAsRead = useCallback(
-    (messageId: string, senderId: string) => {
-      if (!socketRef.current) {
-        console.log('Cannot mark as read: missing socket');
-        return;
-      }
-
-      const message = messages.find((m) => m._id === messageId);
-      if (!message || message.status === 'read') return;
-
-      AsyncStorage.getItem('user').then(userData => {
-        const currentUser = userData ? JSON.parse(userData) : null;
-        if (!currentUser?._id) return;
-
-        if (message.sender !== currentUser._id) {
-          console.log('Marking message as read:', messageId);
-          socketRef.current?.emit('message_read', {
-            messageId,
-            readBy: currentUser._id,
-            senderId: message.sender,
-          });
-
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg._id === messageId ? { ...msg, status: 'read' } : msg
-            )
-          );
-        }
-      });
-    },
-    [messages]
-  );
 
   return (
     <ChatContext.Provider

@@ -18,6 +18,8 @@ import { useAuth } from "./context/AuthContext";
 
 const emojiList: string[] = emoji.names.map((name: string) => emoji.getUnicode(name));
 
+// FIXED ChatScreen.tsx - Key sections that need updates
+
 export default function ChatScreen() {
   const { name, avatar, id } = useLocalSearchParams();
   const router = useRouter();
@@ -35,13 +37,13 @@ export default function ChatScreen() {
   const { user: currentUser } = useAuth();
 
   const [input, setInput] = useState("");
-  const [documentUrl, setDocumentUrl] = useState("")
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [showAttachmentOptions, setShowAttachmentOptions] = useState(false);
-
+  const [documentUrl, setDocumentUrl] = useState("");
   const [isSending, setIsSending] = useState(false);
   const flatListRef = useRef<FlatList>(null);
-  console.log("documentUrl", documentUrl);
+  const lastMessageReadRef = useRef<string>('');
+
+  console.log(messages, "messages");
+
   // Set current chat when screen loads
   useEffect(() => {
     console.log("Setting up chat with:", { id, name });
@@ -52,7 +54,6 @@ export default function ChatScreen() {
       return;
     }
 
-    // Setup current chat user
     setCurrentChat({
       _id: id as string,
       name: name as string,
@@ -60,41 +61,12 @@ export default function ChatScreen() {
       profilePicture: avatar as string,
     });
 
-    // Fetch messages
     fetchMessages(id as string);
+  }, [id]);
 
-    // Join socket room if needed
-    if (socket) {
-      socket.emit('join_chat', id);
-    }
-
-    return () => {
-      // Leave chat room on unmount if needed
-      if (socket) {
-        socket.emit('leave_chat', id);
-      }
-    };
-  }, [id, socket]);
-
-  // Monitor errors
+    // FIXED: Auto-mark messages as read when screen is active
   useEffect(() => {
-    if (error) {
-      Alert.alert("Chat Error", error);
-    }
-  }, [error]);
-
-  // Scroll to bottom when messages change
-  useEffect(() => {
-    if (messages?.length > 0) {
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
-    }
-  }, [messages]);
-
-  // Mark messages as read when they appear on screen
-  useEffect(() => {
-    if (!currentUser?._id) return;
+    if (!currentUser?._id || !messages.length) return;
 
     const unreadMessages = messages.filter(
       (msg) =>
@@ -103,31 +75,67 @@ export default function ChatScreen() {
         msg.status !== 'read'
     );
 
-    if (unreadMessages?.length > 0) {
-      console.log(`Marking ${unreadMessages?.length} messages as read`);
-      unreadMessages.forEach((msg) => markAsRead(msg._id, msg.sender));
+    if (unreadMessages.length > 0) {
+      console.log(`Auto-marking ${unreadMessages.length} messages as read`);
+      
+      // Add small delay to ensure messages are visible
+      const timer = setTimeout(() => {
+        unreadMessages.forEach((msg) => {
+          console.log('Auto-marking message as read:', msg._id);
+          markAsRead(msg._id, msg.sender);
+        });
+      }, 1000); // 1 second delay
+
+      return () => clearTimeout(timer);
+    }
+  }, [messages, currentUser?._id, id, markAsRead]);
+
+  // FIXED: Mark messages as read (prevent duplicate reads)
+  useEffect(() => {
+    if (!currentUser?._id || !messages.length) return;
+
+    const unreadMessages = messages.filter(
+      (msg) =>
+        msg.receiver === currentUser._id &&
+        msg.sender === id &&
+        msg.status !== 'read'
+    );
+
+    // Only process if there are new unread messages
+    if (unreadMessages.length > 0) {
+      const latestUnreadId = unreadMessages[unreadMessages.length - 1]._id;
+      
+      // Avoid marking the same message multiple times
+      if (latestUnreadId !== lastMessageReadRef.current) {
+        console.log(`Marking ${unreadMessages.length} messages as read`);
+        unreadMessages.forEach((msg) => markAsRead(msg._id, msg.sender));
+        lastMessageReadRef.current = latestUnreadId;
+      }
     }
   }, [messages, currentUser?._id, id]);
 
+  // FIXED: Handle send message with proper loading state
   const handleSendMessage = async () => {
-    if (input.trim() === "" || isSending) return;
+    const messageText = input.trim();
+    if (!messageText || isSending) return;
 
     try {
       setIsSending(true);
-      await sendMessage(input);
-      setInput("");
-      setShowEmojiPicker(false);
+      const inputToSend = input; // Store input before clearing
+      setInput(""); // Clear input immediately
+      
+      await sendMessage(inputToSend);
     } catch (err) {
-      Alert.alert("Error", "Failed to send message. Please try again.");
       console.error("Send message error:", err);
+      Alert.alert("Error", "Failed to send message. Please try again.");
+      setInput(input); // Restore input on error
     } finally {
       setIsSending(false);
     }
   };
 
-
+  // Rest of your component remains the same...
   const handleProfileNavigation = () => {
-    console.log("Avatar clicked: navigating to profile screen");
     router.push({
       pathname: "/ProfileScreen",
       params: {
@@ -139,21 +147,11 @@ export default function ChatScreen() {
     });
   };
 
-  // const isOnline = onlineUsers.includes(id as string);
-  const isOnline = !!onlineUsers?.includes(id?.toString());
-
-
-  // Debug socket connection
-  const debugConnection = () => {
-    console.log("Socket connected:", !!socket?.connected);
-    console.log("Current user:", currentUser?._id);
-    console.log("Chat with:", id);
-    console.log("Online users:", onlineUsers);
-    console.log("Message count:", messages?.length);
-  };
+  const isOnline = onlineUsers?.includes(id?.toString());
 
   return (
     <View style={styles.container}>
+      {/* Header remains the same */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.replace("/Chats")}>
           <Ionicons name="arrow-back" size={24} color="black" style={styles.backIcon} />
@@ -166,22 +164,15 @@ export default function ChatScreen() {
                 ? avatar.toString()
                 : `https://ui-avatars.com/api/?name=${encodeURIComponent(name as string)}&background=random&length=1`,
             }}
-            style={[
-              styles.avatar,
-              isOnline && styles.avatarOnline
-            ]}
+            style={[styles.avatar, isOnline && styles.avatarOnline]}
           />
         </TouchableOpacity>
 
         <View style={styles.headerText}>
           <Text style={styles.name}>{name}</Text>
-          <Text style={[
-            styles.time,
-            isOnline && styles.onlineText
-          ]}>
+          <Text style={[styles.time, isOnline && styles.onlineText]}>
             {isOnline ? "Online" : "Offline"}
           </Text>
-
         </View>
 
         <View style={styles.headerIcons}>
@@ -220,61 +211,62 @@ export default function ChatScreen() {
                     item.sender === currentUser?._id ? styles.myMessage : styles.theirMessage,
                   ]}
                 >
-                  {/* Show text if present */}
                   {item.text && <Text style={styles.messageText}>{item.text}</Text>}
-                  <Image
-                    source={{ uri: documentUrl }}
-                    style={styles.filePreview}
-                    resizeMode="cover"
-                  />
-                  {/* Handle file attachments */}
+                  
                   {item.fileUrl && (
-                    <View style={styles.container}>
-                      {/* For images, show preview */}
+                    <View>
                       {item.fileType && item.fileType.startsWith('image/') ? (
                         <Image
                           source={{ uri: item.fileUrl }}
+                          crossOrigin="anonymous"
                           style={styles.filePreview}
                           resizeMode="cover"
                         />
                       ) : (
-                        /* For other files, show an icon and filename */
                         <TouchableOpacity
                           style={styles.fileBox}
                           onPress={() => Linking.openURL(item.fileUrl)}
                         >
-                          <Ionicons
-                            name="document-outline"
-                            size={24}
-                            color="#2196F3"
-                          />
+                          <Ionicons name="document-outline" size={24} color="#2196F3" />
                           <Text style={styles.fileName} numberOfLines={1} ellipsizeMode="middle">
                             {item.fileName || "File attachment"}
                           </Text>
                         </TouchableOpacity>
                       )}
                     </View>
-                    )}
+                  )}
 
-                  {/* Message metadata */}
-                  {/* <Text style={styles.messageStatus}>
-                  {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                   {item.status === 'delivered' && ' ✓'}
-                  {item.status === 'read' && ' ✓✓'}
-                 
-                    </Text> */}
-               
+                  {/* FIXED: Message status display */}
                   <Text style={styles.messageStatus}>
-                    {item.timestamp && !isNaN(new Date(item.timestamp).getTime())
-                      ? new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                      : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    {item.sender === currentUser?._id && item.status === 'delivered' && ' ✓'}
-                    {item.sender === currentUser?._id && item.status === 'read' && ' ✓✓'}
+                    {item.timestamp 
+                  ? new Date(item.timestamp).toLocaleTimeString([], { 
+                      hour: '2-digit', 
+                      minute: '2-digit' 
+                    })
+                  : new Date().toLocaleTimeString([], { 
+                      hour: '2-digit', 
+                      minute: '2-digit' 
+                    })
+                }
+                    {/* Only show status for sent messages */}
+                     {item.sender === currentUser?._id && (
+                <View style={styles.statusTicks}>
+                  {item.status === 'sent' && (
+                    <Text style={[styles.tick, styles.singleTick]}>✓</Text>
+                  )}
+                  {item.status === 'delivered' && (
+                    <Text style={[styles.tick, styles.doubleTick]}>✓✓</Text>
+                  )}
+                  {item.status === 'read' && (
+                    <Text style={[styles.tick, styles.readTick]}>✓✓</Text>
+                  )}
+                </View>
+              )}
                   </Text>
-
                 </View>
               )}
               contentContainerStyle={styles.messagesContainer}
+              onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
             />
           )}
 
@@ -283,11 +275,10 @@ export default function ChatScreen() {
             setInput={setInput}
             onSend={handleSendMessage}
             isSending={isSending}
-            showEmojiPicker={showEmojiPicker}
+            showEmojiPicker={false}
             setDocumentUrl={setDocumentUrl}
-            setShowEmojiPicker={setShowEmojiPicker}
+            setShowEmojiPicker={() => {}}
           />
-
         </KeyboardAvoidingView>
       )}
     </View>
@@ -322,12 +313,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginTop: 5,
   },
-  messageStatus: {
-    fontSize: 12,
-    color: '#666',
-    alignSelf: 'flex-end',
-    marginTop: 2,
-  },
+ 
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -467,6 +453,33 @@ const styles = StyleSheet.create({
     color: "#2196F3",
     marginTop: 5,
     textAlign: "center",
+  },
+  messageStatus: {
+    fontSize: 11,
+    color: '#666',
+    marginRight: 4,
+  },
+  
+  statusTicks: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  
+  tick: {
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  
+  singleTick: {
+    color: '#999', // Gray for sent
+  },
+  
+  doubleTick: {
+    color: '#999', // Gray for delivered
+  },
+  
+  readTick: {
+    color: '#4CAF50', // Green/blue for read
   },
 });
 
