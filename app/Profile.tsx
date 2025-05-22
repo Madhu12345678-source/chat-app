@@ -435,35 +435,35 @@
 //       Alert.alert('Permission required', 'We need camera roll permissions to upload images');
 //       return;
 //     }
-  
+
 //     let result = await ImagePicker.launchImageLibraryAsync({
 //       mediaTypes: ImagePicker.MediaTypeOptions.Images,
 //       allowsEditing: true,
 //       aspect: [1, 1],
 //       quality: 1,
 //     });
-  
+
 //     if (!result.canceled) {
 //       const image = result.assets[0];
 //       const localUri = image.uri;
 //       const filename = localUri.split('/').pop();
 //       const match = /\.(\w+)$/.exec(filename ?? '');
 //       const type = match ? `image/${match[1]}` : `image`;
-  
+
 //       const formData = new FormData();
 //       formData.append('profileImage', {
 //         uri: localUri,
 //         name: filename,
 //         type,
 //       });
-  
+
 //       // Add other fields (optional)
 //       formData.append('name', userData.name);
 //       formData.append('nickname', userData.nickname);
 //       formData.append('phone', userData.phone);
 //         setUserData((prev: UserData | null) => ({ ...prev, profileImage: localUri }));
 //       formData.append('gender', userData.gender);
-  
+
 //       try {
 //         const token = await AsyncStorage.getItem("token");
 //         await axios.put(`http://localhost:3000/users/update-profile`, formData, {
@@ -472,7 +472,7 @@
 //             Authorization: `Bearer ${token}`,
 //           },
 //         });
-  
+
 //         setUserData(prev => ({ ...prev, profileImage: localUri }));
 //         console.log('Profile updated');
 //       } catch (error) {
@@ -480,7 +480,7 @@
 //       }
 //     }
 //   };
-  
+
 //   if (loading) {
 //     return (
 //       <View style={styles.centered}>
@@ -625,7 +625,7 @@ export default function ProfileScreen() {
   const [uploading, setUploading] = useState(false);
   const [isCurrentUser, setIsCurrentUser] = useState(false);
   const { id, name, avatar, time, gender } = useLocalSearchParams();
-  
+
   useEffect(() => {
     const checkCurrentUser = async () => {
       try {
@@ -697,80 +697,75 @@ export default function ProfileScreen() {
   }, [id, name, avatar, time, gender]);
 
   // ProfileScreen.tsx
-const pickImage = async () => {
- 
-  // Request permissions
-  const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (status !== 'granted') {
-    Alert.alert('Permission required', 'We need camera roll permissions to upload images');
-    return;
-  }
+  const pickImage = async () => {
 
-  // Launch image picker
-  let result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ImagePicker.MediaTypeOptions.Images,
-    allowsEditing: true,
-    aspect: [1, 1],
-    quality: 0.8,
-  });
+    // Request permissions
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission required', 'We need camera roll permissions to upload images');
+      return;
+    }
 
-  if (!result.canceled && result.assets[0]) {
-    await uploadImage(result.assets[0].uri);
-  }
-};
+    // Launch image picker
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
 
-const uploadImage = async (uri: string) => {
-  setUploading(true);
-  
-  try {
-    // Prepare the file for upload
-    const filename = uri.split('/').pop() || 'profile.jpg';
-    const match = /\.(\w+)$/.exec(filename);
-    const type = match ? `image/${match[1]}` : 'image/jpeg';
+    if (!result.canceled && result.assets[0]) {
+      await uploadImage(result.assets[0].uri);
+    }
+  };
 
-    const formData = new FormData();
-    formData.append('profileImage', {
-      uri,
-      name: filename,
-      type,
-    } as any);
+  const uploadImage = async (uri: string) => {
+    setUploading(true);
 
-    // Add other user data
-    formData.append('name', userData.name);
-    if (userData.nickname) formData.append('nickname', userData.nickname);
-    if (userData.phone) formData.append('phone', userData.phone);
-    if (userData.bio) formData.append('bio', userData.bio);
-    if (userData.gender) formData.append('gender', userData.gender);
+    try {
+      const filename = uri.split('/').pop() || 'profile.jpg';
+      const match = /\.(\w+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : 'image/jpeg';
 
-    const token = await AsyncStorage.getItem("token");
-    const response = await axios.put(
-      'http://localhost:3000/users/update-profile',
-      formData,
-      {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          'Authorization': `Bearer ${token}`,
-        },
-      }
-    );
+      const formData = new FormData();
+      // Create a proper file object
+      formData.append('profilePicture', {
+        uri,
+        name: filename,
+        type,
+      } as any); // Still need 'as any' for React Native
 
-    // Update local state
-    const updatedUser = { ...userData, profileImage: uri };
-    setUserData(updatedUser);
-    
-    // Update AsyncStorage if this is the current user's profile
-    await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+      const token = await AsyncStorage.getItem("token");
+      const response = await axios.put(
+        'http://localhost:3000/users/update-profile',
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      );
 
-    Alert.alert("Success", "Profile image updated successfully");
-  } catch (error) {
-    console.error("Upload error:", error);
-    Alert.alert("Error", "Failed to update profile image");
-  } finally {
-    setUploading(false);
-  }
-};
+      // Use the response data from server instead of local URI
+      const updatedUser = {
+        ...userData,
+        profilePicture: response.data.profilePicture // or whatever field the server returns
+      };
 
- 
+      setUserData(updatedUser);
+      await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+
+      Alert.alert("Success", "Profile image updated successfully");
+    } catch (error) {
+      console.error("Upload error:", error);
+      Alert.alert("Error", "Failed to update profile image");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+
 
   if (loading) {
     return (
@@ -792,21 +787,23 @@ const uploadImage = async (uri: string) => {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.profileContainer}>
-        <TouchableOpacity 
-          onPress={pickImage} 
+        <TouchableOpacity
+          onPress={pickImage}
           style={styles.imageContainer}
-         
+
         >
-        
-            <Image
-              source={{
-                uri: userData.profileImage
-                  ? userData.profileImage
-                  : `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.name)}&background=random&length=1`,
-              }}
-              style={styles.profileImage}
-            />
-          
+
+          <Image
+            source={{
+              uri: userData.profilePicture
+                ? userData.profilePicture.startsWith('http')
+                  ? userData.profilePicture
+                  : userData.profilePicture
+                : `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.name)}&background=random&length=1`,
+            }}
+            style={styles.profileImage}
+          />
+
           <View style={styles.cameraIconContainer}>
             <MaterialIcons name="photo-camera" size={20} color="white" />
           </View>

@@ -6,6 +6,8 @@ import { AuthProvider } from './context/AuthContext';
 import React from 'react';
 import { ChatProvider } from './context/ChatContext';
 import { darkTheme, lightTheme } from './themes/Theme'; // Make sure this file exists
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import PreviewScreen from '../app/CameraScreen/PreviewScreen';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -30,6 +32,9 @@ export default function RootLayout() {
             <Stack.Screen name="RegisterScreen" options={{ headerShown: false }} />
             <Stack.Screen name="Chats" />
             <Stack.Screen name="ProfileScreen" />
+             <Stack.Screen name="CameraScreen" />
+             
+        <Stack.Screen name="Preview" />
             <Stack.Screen name="ChatScreen" options={{ headerShown: false }} />
           </Stack>
         {/* </ThemeProvider> */}

@@ -35,12 +35,13 @@ export default function ChatScreen() {
   const { user: currentUser } = useAuth();
 
   const [input, setInput] = useState("");
+  const [documentUrl, setDocumentUrl] = useState("")
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showAttachmentOptions, setShowAttachmentOptions] = useState(false);
 
   const [isSending, setIsSending] = useState(false);
   const flatListRef = useRef<FlatList>(null);
-
+  console.log("documentUrl", documentUrl);
   // Set current chat when screen loads
   useEffect(() => {
     console.log("Setting up chat with:", { id, name });
@@ -123,13 +124,15 @@ export default function ChatScreen() {
       setIsSending(false);
     }
   };
+
+
   const handleProfileNavigation = () => {
-     console.log("Avatar clicked: navigating to profile screen");
+    console.log("Avatar clicked: navigating to profile screen");
     router.push({
       pathname: "/ProfileScreen",
-      params: { 
-        id: id as string, 
-        name: name as string, 
+      params: {
+        id: id as string,
+        name: name as string,
         avatar: avatar as string,
         time: new Date().toLocaleTimeString()
       }
@@ -156,7 +159,7 @@ export default function ChatScreen() {
           <Ionicons name="arrow-back" size={24} color="black" style={styles.backIcon} />
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={handleProfileNavigation }>
+        <TouchableOpacity onPress={handleProfileNavigation}>
           <Image
             source={{
               uri: avatar
@@ -178,7 +181,7 @@ export default function ChatScreen() {
           ]}>
             {isOnline ? "Online" : "Offline"}
           </Text>
-          
+
         </View>
 
         <View style={styles.headerIcons}>
@@ -207,59 +210,72 @@ export default function ChatScreen() {
             </View>
           ) : (
             <FlatList
-            ref={flatListRef}
-            data={messages}
-            keyExtractor={(item) => item._id}
-            renderItem={({ item }) => (
-              <View
-                style={[
-                  styles.messageBubble,
-                  item.sender === currentUser?._id ? styles.myMessage : styles.theirMessage,
-                ]}
-              >
-                {/* Show text if present */}
-                {item.text && <Text style={styles.messageText}>{item.text}</Text>}
-                
-                {/* Handle file attachments */}
-                {item.fileUrl && (
-                  <View style={styles.container}>
-                    {/* For images, show preview */}
-                    {item.fileType && item.fileType.startsWith('image/') ? (
-                      <Image
-                        source={{ uri: item.fileUrl }}
-                        style={styles.filePreview}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      /* For other files, show an icon and filename */
-                      <TouchableOpacity 
-                        style={styles.fileBox}
-                        onPress={() => Linking.openURL(item.fileUrl)}
-                      >
-                        <Ionicons 
-                          name="document-outline" 
-                          size={24} 
-                          color="#2196F3" 
+              ref={flatListRef}
+              data={messages}
+              keyExtractor={(item) => item._id}
+              renderItem={({ item }) => (
+                <View
+                  style={[
+                    styles.messageBubble,
+                    item.sender === currentUser?._id ? styles.myMessage : styles.theirMessage,
+                  ]}
+                >
+                  {/* Show text if present */}
+                  {item.text && <Text style={styles.messageText}>{item.text}</Text>}
+                  <Image
+                    source={{ uri: documentUrl }}
+                    style={styles.filePreview}
+                    resizeMode="cover"
+                  />
+                  {/* Handle file attachments */}
+                  {item.fileUrl && (
+                    <View style={styles.container}>
+                      {/* For images, show preview */}
+                      {item.fileType && item.fileType.startsWith('image/') ? (
+                        <Image
+                          source={{ uri: item.fileUrl }}
+                          style={styles.filePreview}
+                          resizeMode="cover"
                         />
-                        <Text style={styles.fileName} numberOfLines={1} ellipsizeMode="middle">
-                          {item.fileName || "File attachment"}
-                        </Text>
-                      </TouchableOpacity>
+                      ) : (
+                        /* For other files, show an icon and filename */
+                        <TouchableOpacity
+                          style={styles.fileBox}
+                          onPress={() => Linking.openURL(item.fileUrl)}
+                        >
+                          <Ionicons
+                            name="document-outline"
+                            size={24}
+                            color="#2196F3"
+                          />
+                          <Text style={styles.fileName} numberOfLines={1} ellipsizeMode="middle">
+                            {item.fileName || "File attachment"}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
                     )}
-                  </View>
-                )}
-                
-                {/* Message metadata */}
-                <Text style={styles.messageStatus}>
+
+                  {/* Message metadata */}
+                  {/* <Text style={styles.messageStatus}>
                   {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                    {item.status === 'delivered' && ' ✓'}
                   {item.status === 'read' && ' ✓✓'}
                  
-                </Text>
-              </View>
-            )}
-            contentContainerStyle={styles.messagesContainer}
-          />
+                    </Text> */}
+               
+                  <Text style={styles.messageStatus}>
+                    {item.timestamp && !isNaN(new Date(item.timestamp).getTime())
+                      ? new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                      : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {item.sender === currentUser?._id && item.status === 'delivered' && ' ✓'}
+                    {item.sender === currentUser?._id && item.status === 'read' && ' ✓✓'}
+                  </Text>
+
+                </View>
+              )}
+              contentContainerStyle={styles.messagesContainer}
+            />
           )}
 
           <ChatBox
@@ -268,6 +284,7 @@ export default function ChatScreen() {
             onSend={handleSendMessage}
             isSending={isSending}
             showEmojiPicker={showEmojiPicker}
+            setDocumentUrl={setDocumentUrl}
             setShowEmojiPicker={setShowEmojiPicker}
           />
 
@@ -300,8 +317,8 @@ const styles = StyleSheet.create({
     marginHorizontal: 10,
   },
   filePreview: {
-    width: 200,
-    height: 200,
+    width: 10,
+    height: 10,
     borderRadius: 10,
     marginTop: 5,
   },

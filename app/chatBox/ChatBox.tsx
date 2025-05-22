@@ -19,7 +19,6 @@ import {
 import * as Camera from "expo-camera";
 import * as FileSystem from 'expo-file-system';
 // import { Audio } from "expo-av";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import AttachmentModal from "../attachement/Attachement";
 
@@ -30,6 +29,7 @@ interface Props {
   isSending: boolean;
   showEmojiPicker: boolean;
   setShowEmojiPicker: (show: boolean) => void;
+  setDocumentUrl: (url: string) => void;
 }
 
 const emojiList: string[] = emoji.names.map((name: string) => emoji.getUnicode(name));
@@ -41,7 +41,7 @@ export default function ChatBox({
   isSending,
   showEmojiPicker,
   setShowEmojiPicker,
-
+setDocumentUrl,
 }: Props) {
 
   const [selectedDocument, setSelectedDocument] = useState<any>(null);
@@ -181,71 +181,39 @@ export default function ChatBox({
           console.log('Location:', loc.coords.latitude, loc.coords.longitude);
           break;
 
+      
         case 'document':
-          try {
             const docResult = await DocumentPicker.getDocumentAsync({
-              type: [
-                'image/jpeg',
-                'image/png',
-                'image/gif',
-                'application/pdf',
-                'application/msword',
-                'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-              ],
-              copyToCacheDirectory: true
+              type: '*/*',
+              copyToCacheDirectory: true 
             });
-
+            
             if (!docResult.canceled && docResult.assets?.[0]) {
               const file = docResult.assets[0];
-
-              // Validate file type
-              const allowedTypes = [
-                'image/jpeg',
-                'image/png',
-                'image/gif',
-                'application/pdf',
-                'application/msword',
-                'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-              ];
-
-              if (!allowedTypes.includes(file.mimeType || '')) {
-                Alert.alert(
-                  "Invalid File Type",
-                  "Only images (JPEG, PNG, GIF), PDFs, and Word documents are allowed."
-                );
-                return;
-              }
-
-              // Comprehensive file size validation
-              const { isValid, actualSize } = await validateFileSize(file);
-
-              if (!isValid) {
-                Alert.alert(
-                  "File Too Large",
-                  `File must be less than 10MB. Current file size is ${(actualSize / (1024 * 1024)).toFixed(2)} MB.`
-                );
-                return;
-              }
-
-              // Proceed with file upload...
-              const formData = new FormData();
-              formData.append('file', {
-                uri: file.uri,
-                type: file.mimeType || 'application/octet-stream',
-                name: file.name || `document-${Date.now()}`
-              } as any);
-
-              // Rest of the upload logic...
+              
+              // Convert to Blob first
+              const response = await fetch(file.uri);
+              const blob = await response.blob();
+              
+              const formData =new FormData();
+              formData.append("file", blob, file.name || "document");
+              
+              const uploadResponse = await fetch("http://localhost:3000/upload/file", {
+                method: "POST",
+                body: formData,
+                // headers: {
+                //   "Content-Type": "multipart/form-data",
+                // },
+              });
+    
+              if (!uploadResponse.ok) throw new Error("Upload failed");
+              
+              const result = await uploadResponse.json();
+              setDocumentUrl(result.fileUrl);
+              console.log("Upload success:", result);
+              Alert.alert("Success", "Document uploaded!");
             }
-          } catch (err) {
-            console.error('Document selection error:', err);
-            Alert.alert(
-              "Error",
-              "Failed to select or process the document."
-            );
-          }
-          break;
-
+            break;
         case 'audio':
           const audioResult = await DocumentPicker.getDocumentAsync({
             type: 'audio/*',
@@ -255,7 +223,6 @@ export default function ChatBox({
             const audio = audioResult.assets[0];
             console.log('Audio File:', audio.uri);
           }
-
           break;
       }
     } catch (err) {
@@ -379,3 +346,337 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
 });
+
+
+// import { Ionicons } from "@expo/vector-icons";
+// import emoji from "emoji-dictionary";
+// import * as DocumentPicker from "expo-document-picker";
+// import * as FileSystem from 'expo-file-system';
+// import * as ImagePicker from "expo-image-picker";
+// import * as Location from "expo-location";
+// import React, { useState } from "react";
+// import {
+//   ActivityIndicator,
+//   Alert,
+//   Platform,
+//   ScrollView,
+//   StyleSheet,
+//   Text,
+//   TextInput,
+//   TouchableOpacity,
+//   View
+// } from "react-native";
+// import * as Camera from "expo-camera";
+// import axios from "axios";
+// import AttachmentModal from "../attachement/Attachement";
+
+// interface Props {
+//   input: string;
+//   setInput: (text: string) => void;
+//   onSend: () => void;
+//   isSending: boolean;
+//   showEmojiPicker: boolean;
+//   setShowEmojiPicker: (show: boolean) => void;
+// }
+
+// const emojiList: string[] = emoji.names.map((name: string) => emoji.getUnicode(name));
+
+// export default function ChatBox({
+//   input,
+//   setInput,
+//   onSend,
+//   isSending,
+//   showEmojiPicker,
+//   setShowEmojiPicker,
+// }: Props) {
+//   const [showModal, setShowModal] = useState(false);
+
+//   // Configure API base URL based on platform
+//   const API_BASE_URL = Platform.select({
+//     android: 'http://192.168.29.187:3000', // Your local IP for Android
+//     ios: 'http://localhost:3000',
+//     default: 'http://localhost:3000'
+//   });
+
+//   // Helper function to get proper file info
+//   const getFileInfo = async (uri: string, originalName?: string) => {
+//     let fileName = originalName || uri.split('/').pop() || `file-${Date.now()}`;
+    
+//     // Handle Android content URIs
+//     if (Platform.OS === 'android' && uri.startsWith('content://')) {
+//       try {
+//         const fileInfo = await FileSystem.getInfoAsync(uri);
+//         if (fileInfo.exists) {
+//           return {
+//             uri: fileInfo.uri,
+//             name: fileName,
+//           };
+//         }
+//       } catch (error) {
+//         console.warn('Error getting file info:', error);
+//       }
+//     }
+    
+//     return { uri, name: fileName };
+//   };
+
+//   // Improved file size validation
+//   const validateFileSize = async (file: DocumentPicker.DocumentPickerAsset) => {
+//     try {
+//       let fileSize = 0;
+      
+//       if (Platform.OS === 'web') {
+//         fileSize = file.size || 0;
+//       } else {
+//         const fileInfo = await FileSystem.getInfoAsync(file.uri, { size: true });
+//         fileSize = fileInfo.exists && typeof fileInfo.size === 'number' ? fileInfo.size : 0;
+//       }
+
+//       const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+//       return {
+//         isValid: fileSize <= MAX_SIZE,
+//         actualSize: fileSize
+//       };
+//     } catch (error) {
+//       console.error('Size validation error:', error);
+//       return {
+//         isValid: false,
+//         actualSize: 0
+//       };
+//     }
+//   };
+
+//   // Main attachment handler
+//   const handleAttachmentSelect = async (type: string) => {
+//     setShowModal(false);
+
+//     try {
+//       switch (type) {
+//         case 'gallery':
+//           const galleryResult = await ImagePicker.launchImageLibraryAsync({
+//             mediaTypes: ImagePicker.MediaTypeOptions.Images,
+//             allowsEditing: true,
+//             quality: 1,
+//           });
+//           if (!galleryResult.canceled) {
+//             console.log('Selected image:', galleryResult.assets[0]);
+//           }
+//           break;
+
+//         case 'camera':
+//           const [cameraPerm, requestPermission] = Camera.useCameraPermissions();
+//           if (!cameraPerm?.granted) {
+//             const permissionResponse = await requestPermission();
+//             if (!permissionResponse.granted) {
+//               return Alert.alert('Permission denied', 'Camera access is required.');
+//             }
+//           }
+//           const camResult = await ImagePicker.launchCameraAsync({ quality: 1 });
+//           if (!camResult.canceled) {
+//             console.log('Captured image:', camResult.assets[0]);
+//           }
+//           break;
+
+//         case 'location':
+//           const locPerm = await Location.requestForegroundPermissionsAsync();
+//           if (!locPerm.granted) {
+//             return Alert.alert('Permission denied', 'Location access is required.');
+//           }
+//           const loc = await Location.getCurrentPositionAsync({});
+//           console.log('Location:', loc.coords);
+//           break;
+
+//         case 'document':
+//           try {
+//             const docResult = await DocumentPicker.getDocumentAsync({
+//               type: [
+//                 'image/jpeg',
+//                 'image/png',
+//                 'image/gif',
+//                 'application/pdf',
+//                 'application/msword',
+//                 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+//               ],
+//               copyToCacheDirectory: true
+//             });
+
+//             if (!docResult.canceled && docResult.assets?.[0]) {
+//               const file = docResult.assets[0];
+              
+//               // Validate file
+//               const allowedTypes = [
+//                 'image/jpeg',
+//                 'image/png',
+//                 'image/gif',
+//                 'application/pdf',
+//                 'application/msword',
+//                 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+//               ];
+
+//               if (!allowedTypes.includes(file.mimeType || '')) {
+//                 return Alert.alert("Invalid File Type", "Only images, PDFs and Word docs are allowed.");
+//               }
+
+//               const { isValid, actualSize } = await validateFileSize(file);
+//               if (!isValid) {
+//                 return Alert.alert(
+//                   "File Too Large",
+//                   `Max size: 10MB. Your file: ${(actualSize / (1024 * 1024)).toFixed(2)}MB`
+//                 );
+//               }
+
+//               // Prepare FormData
+//               const fileInfo = await getFileInfo(file.uri, file.name);
+//               const formData = new FormData();
+//               formData.append('file', {
+//                 uri: fileInfo.uri,
+//                 name: fileInfo.name,
+//                 type: file.mimeType || 'application/octet-stream',
+//               } as any);
+
+//               // Debug logs
+//               console.log('Uploading file:', {
+//                 uri: fileInfo.uri,
+//                 name: fileInfo.name,
+//                 type: file.mimeType
+//               });
+
+//               // Upload
+//               const response = await axios.post(
+//                 `${API_BASE_URL}/upload/file`,
+//                 formData
+//               );
+              
+//               console.log('Upload success:', response.data);
+//               Alert.alert("Success", "File uploaded successfully!");
+//             }
+//           } catch (err) {
+//             console.error('Document error:', err);
+//             Alert.alert("Error", "Failed to upload document");
+//           }
+//           break;
+
+//         case 'audio':
+//           const audioResult = await DocumentPicker.getDocumentAsync({
+//             type: 'audio/*',
+//           });
+
+//           if (!audioResult.canceled && audioResult.assets?.[0]) {
+//             console.log('Selected audio:', audioResult.assets[0]);
+//           }
+//           break;
+//       }
+//     } catch (err) {
+//       console.error('Attachment error:', err);
+//       Alert.alert('Error', 'Something went wrong');
+//     }
+//   };
+
+//   return (
+//     <>
+//       {showEmojiPicker && (
+//         <ScrollView style={styles.emojiScrollView}>
+//           {emojiList.map((emoji, index) => (
+//             <TouchableOpacity
+//               key={index}
+//               onPress={() => setInput(input + emoji)}
+//               style={styles.emojiItem}
+//             >
+//               <Text style={styles.emojiText}>{emoji}</Text>
+//             </TouchableOpacity>
+//           ))}
+//         </ScrollView>
+//       )}
+
+//       <View style={styles.inputContainer}>
+//         <TouchableOpacity 
+//           onPress={() => setShowEmojiPicker(!showEmojiPicker)} 
+//           style={styles.emojiButton}
+//         >
+//           <Text style={{ fontSize: 24 }}>😊</Text>
+//         </TouchableOpacity>
+
+//         <TextInput
+//           style={styles.input}
+//           value={input}
+//           onChangeText={setInput}
+//           placeholder="Type a message"
+//           multiline
+//         />
+
+//         <TouchableOpacity 
+//           onPress={() => setShowModal(true)} 
+//           style={styles.attachButton}
+//         >
+//           <Ionicons name="attach" size={24} color="#555" />
+//         </TouchableOpacity>
+        
+//         <TouchableOpacity
+//           onPress={onSend}
+//           style={[styles.sendButton, (input.trim() === "" || isSending) && styles.sendButtonDisabled]}
+//           disabled={input.trim() === "" || isSending}
+//         >
+//           {isSending ? (
+//             <ActivityIndicator size="small" color="white" />
+//           ) : (
+//             <Ionicons name="send" size={20} color="white" />
+//           )}
+//         </TouchableOpacity>
+//       </View>
+      
+//       <AttachmentModal 
+//         visible={showModal} 
+//         onClose={() => setShowModal(false)} 
+//         onSelect={handleAttachmentSelect} 
+//       />
+//     </>
+//   );
+// }
+
+// const styles = StyleSheet.create({
+//   inputContainer: {
+//     flexDirection: 'row',
+//     alignItems: 'center',
+//     paddingHorizontal: 10,
+//     paddingVertical: 5,
+//     backgroundColor: '#fff',
+//   },
+//   input: {
+//     flex: 1,
+//     minHeight: 40,
+//     maxHeight: 100,
+//     paddingHorizontal: 12,
+//     paddingVertical: 8,
+//     backgroundColor: '#f5f5f5',
+//     borderRadius: 20,
+//     marginHorizontal: 5,
+//   },
+//   emojiScrollView: {
+//     maxHeight: 200,
+//     backgroundColor: '#f9f9f9',
+//   },
+//   emojiItem: {
+//     padding: 10,
+//   },
+//   emojiText: {
+//     fontSize: 24,
+//   },
+//   emojiButton: {
+//     padding: 8,
+//   },
+//   attachButton: {
+//     padding: 8,
+//     marginRight: 5,
+//   },
+//   sendButton: {
+//     backgroundColor: '#007AFF',
+//     borderRadius: 20,
+//     width: 40,
+//     height: 40,
+//     justifyContent: 'center',
+//     alignItems: 'center',
+//   },
+//   sendButtonDisabled: {
+//     backgroundColor: '#cccccc',
+//   },
+// });

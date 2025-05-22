@@ -78,9 +78,9 @@
 //   },
 // });
 //-----------------------------------------------
+import { Entypo, FontAwesome5, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import React from 'react';
-import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { Ionicons, Entypo, FontAwesome5, MaterialIcons } from '@expo/vector-icons';
+import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface Props {
   visible: boolean;
@@ -94,7 +94,7 @@ export default function AttachmentModal({ visible, onClose, onSelect }: Props) {
       <View style={styles.overlay}>
         <View style={styles.container}>
           <View style={styles.header}>
-            <Text style={styles.headerText}>Attach</Text>
+            {/* <Text style={styles.headerText}>Attach</Text> */}
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color="#fff" />
             </TouchableOpacity>
@@ -178,7 +178,7 @@ const Option = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    
     justifyContent: "flex-end",
   },
   container: {
@@ -189,15 +189,16 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     alignItems: 'center',
+
     marginBottom: 20,
   },
-  headerText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
+  // headerText: {
+  //   color: '#fff',
+  //   fontSize: 18,
+  //   fontWeight: 'bold',
+  // },
   closeButton: {
     padding: 5,
   },
