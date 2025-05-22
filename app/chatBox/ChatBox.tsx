@@ -187,8 +187,7 @@ setDocumentUrl,
 
       
         case 'document':
-          setIsUploading(true);
-          try{
+        
             const docResult = await DocumentPicker.getDocumentAsync({
               type: '*/*',
               copyToCacheDirectory: true 
@@ -220,6 +219,8 @@ setDocumentUrl,
               Alert.alert("Success", "Document uploaded!");
             }
             break;
+
+            
         case 'audio':
           const audioResult = await DocumentPicker.getDocumentAsync({
             type: 'audio/*',
