@@ -35,7 +35,7 @@ export default function ChatScreen() {
     error,
   } = useChat();
   const { user: currentUser } = useAuth();
-
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [input, setInput] = useState("");
   const [documentUrl, setDocumentUrl] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -193,7 +193,7 @@ export default function ChatScreen() {
         <KeyboardAvoidingView
           style={styles.container}
           behavior={Platform.OS === "ios" ? "padding" : undefined}
-          keyboardVerticalOffset={90}
+          keyboardVerticalOffset={50}
         >
           {messages?.length === 0 ? (
             <View style={styles.emptyChat}>
@@ -275,9 +275,11 @@ export default function ChatScreen() {
             setInput={setInput}
             onSend={handleSendMessage}
             isSending={isSending}
-            showEmojiPicker={false}
+            showEmojiPicker={showEmojiPicker}
+            setShowEmojiPicker={setShowEmojiPicker}
+            // showEmojiPicker={false}
             setDocumentUrl={setDocumentUrl}
-            setShowEmojiPicker={() => {}}
+            // setShowEmojiPicker={() => {}}
           />
         </KeyboardAvoidingView>
       )}

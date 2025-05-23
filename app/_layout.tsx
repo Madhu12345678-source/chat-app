@@ -15,16 +15,19 @@ export default function RootLayout() {
   const theme = isDark ? darkTheme : lightTheme;
 
   return (
+
     <AuthProvider>
       <ChatProvider>
         {/* <ThemeProvider theme={theme}> */}
-          <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+        {/* <SafeScreen> */}
           <Stack
             screenOptions={{
               headerStyle: {
                 backgroundColor: theme.background,
               },
               headerTintColor: theme.text,
+
             }}
           >
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -32,11 +35,12 @@ export default function RootLayout() {
             <Stack.Screen name="RegisterScreen" options={{ headerShown: false }} />
             <Stack.Screen name="Chats" />
             <Stack.Screen name="ProfileScreen" />
-             <Stack.Screen name="CameraScreen" />
-             
-        <Stack.Screen name="Preview" />
+            <Stack.Screen name="CameraScreen" />
+
+            <Stack.Screen name="Preview" />
             <Stack.Screen name="ChatScreen" options={{ headerShown: false }} />
           </Stack>
+        {/* </SafeScreen> */}
         {/* </ThemeProvider> */}
       </ChatProvider>
     </AuthProvider>

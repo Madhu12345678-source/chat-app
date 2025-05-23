@@ -8,6 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   FlatList,
   Image,
@@ -144,6 +145,24 @@ export default function ChatListScreen() {
     fetchUnreadMessages();
   }, []);
 
+
+
+const handleLogout = async () => {
+  try {
+    // Clear token and user data
+    await AsyncStorage.removeItem('token');
+    await AsyncStorage.removeItem('user');
+
+    // Navigate to login or home screen
+    router.push('/'); // or router.replace('/login') for better UX
+
+  } catch (error) {
+    console.error('Logout error:', error);
+    Alert.alert('Logout Failed', 'An error occurred during logout.');
+  }
+};
+
+
   // Update unread status when receiving new messages
   useEffect(() => {
     if (!socket) return;
@@ -270,7 +289,8 @@ export default function ChatListScreen() {
             <Menu.Item onPress={() => { closeMenu(); }} title="New Broadcast" />
             <Menu.Item onPress={() => { closeMenu(); }} title="Linked Devices" />
             <Menu.Item onPress={() => router.push('/Profile')} title="Settings" />
-            <Menu.Item onPress={() => router.push('/')} title="Logout" />
+            <Menu.Item onPress={handleLogout} title="Logout" />
+
           </Menu>
         </View>
         <TextInput style={styles.searchBar} placeholder="Search" value={search} onChangeText={setSearch} />

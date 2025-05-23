@@ -4,7 +4,7 @@ import axios from 'axios';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 
 
 const { width } = useWindowDimensions();
@@ -89,7 +89,10 @@ export default function LoginScreen() {
     }
   };
   return (
-    <>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
       {/* <StatusBar style="light" /> */}
       <View style={styles.container}>
         {/* Left Side */}
@@ -156,7 +159,7 @@ export default function LoginScreen() {
           
         </View>
       </View>
-    </>
+    </KeyboardAvoidingView>
   );
 }
 

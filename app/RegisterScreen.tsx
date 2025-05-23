@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, Dimensions, ScrollView, Platform,Alert
+  StyleSheet, Dimensions, ScrollView, Platform,Alert,
+  KeyboardAvoidingView
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
@@ -74,6 +75,7 @@ const RegisterScreen = () => {
   };
 
   return (
+    
     <ScrollView contentContainerStyle={styles.container}>
 
       {/* Features Panel */}
@@ -207,6 +209,7 @@ const RegisterScreen = () => {
         <Text style={styles.signInLink}>Already have an account? <Text style={styles.signInText} onPress={() => router.push('/')}>Sign In</Text></Text>
       </View>
     </ScrollView>
+    
   );
 };
 

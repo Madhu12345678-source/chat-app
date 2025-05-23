@@ -40,8 +40,8 @@ export default function ChatBox({
   setInput,
   onSend,
   isSending,
-  showEmojiPicker,
-  setShowEmojiPicker,
+  // showEmojiPicker,
+  // setShowEmojiPicker,
 setDocumentUrl,
  onSendWithFile, // Add this prop
 }: Props) {
@@ -49,6 +49,7 @@ setDocumentUrl,
   const [selectedDocument, setSelectedDocument] = useState<any>(null);
   const [showModal, setShowModal] = useState(false);
    const [isUploading, setIsUploading] = useState(false);
+     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
 
   const API_BASE_URL = Platform.select({
