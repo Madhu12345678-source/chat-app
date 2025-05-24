@@ -21,6 +21,7 @@ import {
 import { Menu } from 'react-native-paper';
 import { useChat } from "../context/ChatContext";
 
+
 // Define the API base URL
 const API_BASE_URL = "http://192.168.29.187:3000"; // Replace with your actual API base URL
 
@@ -273,6 +274,7 @@ const handleLogout = async () => {
   return (
     <>
       <StatusBar style="light" />
+     
       <View style={styles.container}>
         <View style={styles.headerRow}>
           <Text style={styles.title}>Chats</Text>
@@ -359,6 +361,7 @@ const handleLogout = async () => {
           )}
         />
       </View>
+     
     </>
   );
 }

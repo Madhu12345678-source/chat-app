@@ -42,7 +42,6 @@ export default function ChatScreen() {
   const flatListRef = useRef<FlatList>(null);
   const lastMessageReadRef = useRef<string>('');
 
-  console.log(messages, "messages");
 
   // Set current chat when screen loads
   useEffect(() => {
@@ -212,13 +211,21 @@ export default function ChatScreen() {
                   ]}
                 >
                   {item.text && <Text style={styles.messageText}>{item.text}</Text>}
-                  
+                
+                    {/* <Image
+                          source={{ uri:"https://images.pexels.com/photos/31416570/pexels-photo-31416570/free-photo-of-close-up-of-vibrant-red-ranunculus-flower.jpeg?auto=compress&cs=tinysrgb&w=600&lazy=load" }}
+                          crossOrigin="anonymous"
+                          style={styles.filePreview}
+                          resizeMode="cover"
+                          
+                        /> */}
+                 
                   {item.fileUrl && (
                     <View>
-                      {item.fileType && item.fileType.startsWith('image/') ? (
+                      {item.fileType ? (
                         <Image
-                          source={{ uri: item.fileUrl }}
-                          crossOrigin="anonymous"
+                          source={{ uri:item.fileUrl }}
+                          // crossOrigin="anonymous"
                           style={styles.filePreview}
                           resizeMode="cover"
                         />
@@ -309,12 +316,23 @@ const styles = StyleSheet.create({
   icon: {
     marginHorizontal: 10,
   },
-  filePreview: {
-    width: 10,
-    height: 10,
-    borderRadius: 10,
-    marginTop: 5,
-  },
+filePreview: {
+  width: 300,
+  height: 300,
+  borderRadius: 12,
+  marginTop: 10,
+  borderWidth: 1,
+  borderColor: '#ccc',
+  resizeMode: 'cover',
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.25,
+  shadowRadius: 4,
+  elevation: 5,
+  alignSelf: 'center',
+  backgroundColor: '#f9f9f9',
+}
+,
  
   header: {
     flexDirection: "row",

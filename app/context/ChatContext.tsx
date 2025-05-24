@@ -220,17 +220,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
 
-
   // FIXED: Send message function
   const sendMessage = useCallback(
     async (
       text: string,
       file?: { uri: string; name: string; type: string }
     ) => {
+      console.log(text,file)
       if (!currentChat || !socketRef.current) {
         console.log('Cannot send message: missing chat or socket');
         return;
       }
+
 
       const messageText = text.trim();
       if (!messageText && !file) {
@@ -245,48 +246,54 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (!currentUser?._id) throw new Error('Current user not found');
 
-        let fileUrl = '';
-        let fileName = '';
-        let fileType = '';
+        // let fileUrl = '';
+        // let fileName = '';
+        // let fileType = '';
 
-        // Handle file upload if present
-        if (file && file.uri) {
-          console.log('Uploading file:', file);
+        // // Handle file upload if present
+        // if (file && file.uri) {
+        //   console.log('Uploading file:', file);
 
-          const formData = new FormData();
-          const filename = file.name || file.uri.split('/').pop() || `file-${Date.now()}`;
-          const filetype = file.type || getMimeType(filename);
+        //   const formData = new FormData();
+        //   const filename = file.name || file.uri.split('/').pop() || `file-${Date.now()}`;
+        //   const filetype = file.type || getMimeType(filename);
 
-          formData.append('file', {
-            uri: file.uri,
-            name: filename,
-            type: filetype,
-          } as any);
+        //   formData.append('file', {
+        //     uri: file.uri,
+        //     name: filename,
+        //     type: filetype,
+        //   } as any);
 
-          const uploadResponse = await axios.post(`${API_BASE_URL}/upload/file`, formData, {
-            headers: {
-              'Content-Type': 'multipart/form-data',
-              'Authorization': `Bearer ${token}`,
-            },
-            transformRequest: () => formData,
-          });
+        //   // const uploadResponse = await axios.post(`${API_BASE_URL}/upload/file`, formData, {
+        //   //   headers: {
+        //   //     'Content-Type': 'multipart/form-data',
+        //   //     'Authorization': `Bearer ${token}`,
+        //   //   },
+        //   //   transformRequest: () => formData,
+        //   // });
 
-          if (uploadResponse.status !== 201) {
-            throw new Error('File upload failed');
-          }
+        //   // if (uploadResponse.status !== 201) {
+        //   //   throw new Error('File upload failed');
+        //   // }
 
-          fileUrl = uploadResponse.data.fileUrl;
-          fileName = uploadResponse.data.fileName;
-          fileType = uploadResponse.data.fileType;
-        }
+        //   fileUrl = uploadResponse.data.fileUrl;
+        //   fileName = uploadResponse.data.fileName;
+        //   fileType = uploadResponse.data.fileType;
+        // }
 
         const tempMessageId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+        const filesnew = {
+          fileUrl: file?.uri || '',
+          fileName: file?.name || `file-${Date.now()}`,
+          fileType: file?.type || getMimeType(file?.name || ''),
+        }
 
         const messagePayload = {
           senderId: currentUser._id,
           receiverId: currentChat._id,
           text: messageText,
-          ...(fileUrl && { fileUrl, fileName, fileType })
+          ...filesnew,
         };
 
         // FIXED: Create optimistic message with correct timestamp field
@@ -295,7 +302,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           sender: currentUser._id,
           receiver: currentChat._id,
           text: messageText,
-          ...(fileUrl && { fileUrl, fileName, fileType }),
+          ...filesnew,
           status: 'sent',
           timestamp: new Date().toISOString(), // Use timestamp instead of createdAt
         };

@@ -113,6 +113,7 @@ export default function AttachmentModal({ visible, onClose, onSelect }: Props) {
               label="Camera" 
               onPress={() => onSelect("camera")} 
             />
+            
             <Option 
               icon="location-pin" 
               color="#7ED321" 
@@ -120,6 +121,7 @@ export default function AttachmentModal({ visible, onClose, onSelect }: Props) {
               iconLib="Entypo" 
               onPress={() => onSelect("location")} 
             />
+            
           </View>
           
           <View style={styles.row}>

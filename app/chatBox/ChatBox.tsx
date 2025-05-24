@@ -21,6 +21,7 @@ import * as FileSystem from 'expo-file-system';
 // import { Audio } from "expo-av";
 import axios from "axios";
 import AttachmentModal from "../attachement/Attachement";
+import { useChat } from "../context/ChatContext";
 
 interface Props {
   input: string;
@@ -50,6 +51,8 @@ setDocumentUrl,
   const [showModal, setShowModal] = useState(false);
    const [isUploading, setIsUploading] = useState(false);
      const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+     const {sendMessage} = useChat();
 
 
   const API_BASE_URL = Platform.select({
@@ -216,6 +219,15 @@ setDocumentUrl,
               
               const result = await uploadResponse.json();
               setDocumentUrl(result.fileUrl);
+
+              const files ={
+                uri: result.fileUrl,
+                name: result.fileName || "document",
+                type: result.fileType || "application/octet-stream",
+              }
+
+              await sendMessage("", files);
+
               console.log("Upload success:", result);
               Alert.alert("Success", "Document uploaded!");
             }

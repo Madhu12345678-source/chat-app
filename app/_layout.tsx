@@ -1,6 +1,6 @@
 // app/_layout.tsx
 import { Stack } from 'expo-router';
-import { StatusBar, useColorScheme } from 'react-native';
+import { KeyboardAvoidingView, SafeAreaView, StatusBar, useColorScheme } from 'react-native';
 import { AuthProvider } from './context/AuthContext';
 // import { ThemeProvider } from 'styled-components/native';
 import React from 'react';
@@ -9,18 +9,21 @@ import { darkTheme, lightTheme } from './themes/Theme'; // Make sure this file e
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import PreviewScreen from '../app/CameraScreen/PreviewScreen';
 
+
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const theme = isDark ? darkTheme : lightTheme;
 
   return (
-
+  
     <AuthProvider>
+       
       <ChatProvider>
+       
         {/* <ThemeProvider theme={theme}> */}
         <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-        {/* <SafeScreen> */}
+        
           <Stack
             screenOptions={{
               headerStyle: {
@@ -36,13 +39,17 @@ export default function RootLayout() {
             <Stack.Screen name="Chats" />
             <Stack.Screen name="ProfileScreen" />
             <Stack.Screen name="CameraScreen" />
-
             <Stack.Screen name="Preview" />
             <Stack.Screen name="ChatScreen" options={{ headerShown: false }} />
           </Stack>
-        {/* </SafeScreen> */}
+        
         {/* </ThemeProvider> */}
+       
       </ChatProvider>
+      
     </AuthProvider>
+   
+    
+   
   );
 }
