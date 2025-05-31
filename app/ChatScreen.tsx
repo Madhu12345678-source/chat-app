@@ -1,28 +1,33 @@
+
+
 import React, { useState, useEffect, useRef } from "react";
 import {
-  View, Text, Image, StyleSheet, FlatList,
-  TextInput, Platform, KeyboardAvoidingView,
-  TouchableOpacity, ActivityIndicator,
+  View,
+  Text,
+  Image,
+  StyleSheet,
+  FlatList,
+  TextInput,
+  Platform,
+  KeyboardAvoidingView,
+  TouchableOpacity,
+  ActivityIndicator,
   Alert,
   Linking,
+  StatusBar,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import ChatBox from "./chatBox/ChatBox";
-
-
-import emoji from "emoji-dictionary";
-import { ScrollView } from "react-native";
 import { useChat } from "./context/ChatContext";
 import { useAuth } from "./context/AuthContext";
-
-const emojiList: string[] = emoji.names.map((name: string) => emoji.getUnicode(name));
-
-// FIXED ChatScreen.tsx - Key sections that need updates
+import ChatBox from "./chatBox/ChatBox";
+import { useGroup } from "./context/GroupContext";
 
 export default function ChatScreen() {
-  const { name, avatar, id } = useLocalSearchParams();
+  const { id, name, avatar, isGroup, members, description } = useLocalSearchParams();
   const router = useRouter();
+
+  // Chat context for individual chats
   const {
     messages,
     sendMessage,
@@ -32,474 +37,472 @@ export default function ChatScreen() {
     setCurrentChat,
     fetchMessages,
     socket,
-    error,
   } = useChat();
-  const { user: currentUser } = useAuth();
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [input, setInput] = useState("");
-  const [documentUrl, setDocumentUrl] = useState("");
-  const [isSending, setIsSending] = useState(false);
-  const flatListRef = useRef<FlatList>(null);
-  const lastMessageReadRef = useRef<string>('');
 
+  // Group context for group chats
+  const {
+    currentGroup,
+    setCurrentGroup,
+    groupMessages,
+    sendGroupMessage,
+    markGroupMessageAsRead,
+    loadingGroupMessages,
+    fetchGroupMessages,
+    joinGroup,
+    leaveGroup,
+  } = useGroup();
+
+  const { user: currentUser } = useAuth();
+  const [input, setInput] = useState("");
+  const [isSending, setIsSending] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const flatListRef = useRef<FlatList>(null);
+  const isGroupChat = isGroup === "true";
 
   // Set current chat when screen loads
   useEffect(() => {
-    console.log("Setting up chat with:", { id, name });
-
     if (!id) {
       Alert.alert("Error", "Invalid chat ID");
       router.replace("/Chats");
       return;
     }
 
-    setCurrentChat({
-      _id: id as string,
-      name: name as string,
-      email: '',
-      profilePicture: avatar as string,
-    });
+    if (isGroupChat) {
+      // For group chats, set current group and fetch group messages
+      const groupData = {
+        _id: id as string,
+        name: name as string,
+        description: description as string,
+        members: members ? JSON.parse(members as string) : [],
+        profilePicture: avatar as string,
+        creator: "", // Provide actual creator id if available
+        admins: [],  // Provide actual admins array if available
+        createdAt: new Date().toISOString(), // Provide actual createdAt if available
+      };
 
-    fetchMessages(id as string);
-  }, [id]);
+      setCurrentGroup(groupData);
+      fetchGroupMessages(id as string);
+      joinGroup(id as string);
+    } else {
+      // For individual chats, use existing logic
+      const chatData = {
+        _id: id as string,
+        name: name as string,
+        email: "",
+        profilePicture: avatar as string,
+      };
 
-    // FIXED: Auto-mark messages as read when screen is active
-  useEffect(() => {
-    if (!currentUser?._id || !messages.length) return;
-
-    const unreadMessages = messages.filter(
-      (msg) =>
-        msg.receiver === currentUser._id &&
-        msg.sender === id &&
-        msg.status !== 'read'
-    );
-
-    if (unreadMessages.length > 0) {
-      console.log(`Auto-marking ${unreadMessages.length} messages as read`);
-      
-      // Add small delay to ensure messages are visible
-      const timer = setTimeout(() => {
-        unreadMessages.forEach((msg) => {
-          console.log('Auto-marking message as read:', msg._id);
-          markAsRead(msg._id, msg.sender);
-        });
-      }, 1000); // 1 second delay
-
-      return () => clearTimeout(timer);
+      setCurrentChat(chatData);
+      fetchMessages(id as string);
     }
-  }, [messages, currentUser?._id, id, markAsRead]);
 
-  // FIXED: Mark messages as read (prevent duplicate reads)
+    return () => {
+      if (isGroupChat) {
+        leaveGroup(id as string);
+        setCurrentGroup(null);
+      } else {
+        setCurrentChat(null);
+      }
+    };
+  }, [id, isGroupChat]);
+
+  // Handle marking messages as read
   useEffect(() => {
-    if (!currentUser?._id || !messages.length) return;
+    if (!currentUser?._id) return;
 
-    const unreadMessages = messages.filter(
-      (msg) =>
-        msg.receiver === currentUser._id &&
-        msg.sender === id &&
-        msg.status !== 'read'
-    );
+    if (isGroupChat) {
+      // Mark group messages as read
+      const unreadGroupMessages = groupMessages.filter(msg =>
+        !msg.readBy.some(read => read.user === currentUser._id)
+      );
 
-    // Only process if there are new unread messages
-    if (unreadMessages.length > 0) {
-      const latestUnreadId = unreadMessages[unreadMessages.length - 1]._id;
-      
-      // Avoid marking the same message multiple times
-      if (latestUnreadId !== lastMessageReadRef.current) {
-        console.log(`Marking ${unreadMessages.length} messages as read`);
-        unreadMessages.forEach((msg) => markAsRead(msg._id, msg.sender));
-        lastMessageReadRef.current = latestUnreadId;
+      unreadGroupMessages.forEach(msg => {
+        markGroupMessageAsRead(msg._id);
+      });
+    } else {
+      // Existing logic for individual chats
+      const unreadMessages = messages.filter(msg =>
+        msg.status !== 'read' && msg.sender === id
+      );
+
+      if (unreadMessages.length > 0) {
+        const markAsReadPromises = unreadMessages.map(msg =>
+          markAsRead(msg._id, msg.sender)
+        );
+
+        Promise.all(markAsReadPromises).catch(error => {
+          console.error("Error marking messages as read:", error);
+        });
       }
     }
-  }, [messages, currentUser?._id, id]);
+  }, [isGroupChat ? groupMessages : messages, currentUser?._id, id, isGroupChat]);
 
-  // FIXED: Handle send message with proper loading state
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    const messagesList = isGroupChat ? groupMessages : messages;
+    if (messagesList.length > 0) {
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
+  }, [isGroupChat ? groupMessages : messages]);
+
   const handleSendMessage = async () => {
     const messageText = input.trim();
     if (!messageText || isSending) return;
 
     try {
       setIsSending(true);
-      const inputToSend = input; // Store input before clearing
-      setInput(""); // Clear input immediately
-      
-      await sendMessage(inputToSend);
+      const inputToSend = input;
+      setInput("");
+
+      if (isGroupChat) {
+        await sendGroupMessage(inputToSend);
+      } else {
+        await sendMessage(inputToSend);
+      }
     } catch (err) {
       console.error("Send message error:", err);
       Alert.alert("Error", "Failed to send message. Please try again.");
-      setInput(input); // Restore input on error
+      setInput(input);
     } finally {
       setIsSending(false);
     }
   };
 
-  // Rest of your component remains the same...
-  const handleProfileNavigation = () => {
-    router.push({
-      pathname: "/ProfileScreen",
-      params: {
-        id: id as string,
-        name: name as string,
-        avatar: avatar as string,
-        time: new Date().toLocaleTimeString()
-      }
-    });
+   const handleProfileNavigation = () => {
+    if (isGroupChat) {
+      router.push({
+        pathname: "/GroupChartScreen",
+        params: {
+          groupId: id as string,
+          groupName: name as string,
+          avatar: avatar as string,
+          members: members as string,
+          description: description as string
+        }
+      });
+    } else {
+      router.push({
+        pathname: "/ProfileScreen",
+        params: {
+          id: id as string,
+          name: name as string,
+          avatar: avatar as string,
+        }
+      });
+    }
   };
 
-  const isOnline = onlineUsers?.includes(id?.toString());
+  // Update the renderMessageItem function
+  const renderMessageItem = ({ item }: { item: any }) => {
+    const isCurrentUser = isGroupChat
+      ? item.sender._id === currentUser?._id
+      : item.sender === currentUser?._id;
+    const isImage = item.fileType?.startsWith("image/");
+    const isDocument = item.fileUrl && !isImage;
 
-  return (
-    <View style={styles.container}>
-      {/* Header remains the same */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.replace("/Chats")}>
-          <Ionicons name="arrow-back" size={24} color="black" style={styles.backIcon} />
-        </TouchableOpacity>
+    return (
+      <View
+        style={[
+          styles.messageBubble,
+          isCurrentUser ? styles.myMessage : styles.theirMessage,
+        ]}
+      >
 
-        <TouchableOpacity onPress={handleProfileNavigation}>
-          <Image
-            source={{
-              uri: avatar
-                ? avatar.toString()
-                : `https://ui-avatars.com/api/?name=${encodeURIComponent(name as string)}&background=random&length=1`,
-            }}
-            style={[styles.avatar, isOnline && styles.avatarOnline]}
-          />
-        </TouchableOpacity>
 
-        <View style={styles.headerText}>
-          <Text style={styles.name}>{name}</Text>
-          <Text style={[styles.time, isOnline && styles.onlineText]}>
-            {isOnline ? "Online" : "Offline"}
+
+        {/* Show sender name for group messages (if not current user) */}
+        {isGroupChat && !isCurrentUser && (
+          <Text style={styles.senderName}>{item.sender.name}</Text>
+        )}
+
+        {item.text && <Text style={styles.messageText}>{item.text}</Text>}
+
+        {item.fileUrl && (
+          <View style={styles.fileContainer}>
+            {isImage ? (
+              <Image
+                source={{ uri: item.fileUrl }}
+                style={styles.filePreview}
+                resizeMode="cover"
+              />
+            ) : (
+              <TouchableOpacity
+                style={styles.fileBox}
+                onPress={() => Linking.openURL(item.fileUrl)}
+              >
+                <Ionicons name="document-outline" size={24} color="#2196F3" />
+                <Text style={styles.fileName} numberOfLines={1} ellipsizeMode="middle">
+                  {item.fileName || "File attachment"}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        <View style={styles.messageFooter}>
+          <Text style={styles.messageTime}>
+            {new Date(isGroupChat ? item.timestamp : item.timestamp).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit'
+            })}
           </Text>
-        </View>
-
-        <View style={styles.headerIcons}>
-          <TouchableOpacity onPress={() => console.log("Video Call Pressed")}>
-            <Ionicons name="videocam" size={22} color="black" style={styles.icon} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => console.log("Audio Call Pressed")}>
-            <Ionicons name="call" size={22} color="black" style={styles.icon} />
-          </TouchableOpacity>
+          {isCurrentUser && !isGroupChat && (
+            <View style={styles.statusIndicator}>
+              {item.status === 'read' ? (
+                <Ionicons name="checkmark-done" size={16} color="#4CAF50" />
+              ) : item.status === 'delivered' ? (
+                <Ionicons name="checkmark-done" size={16} color="#888" />
+              ) : (
+                <Ionicons name="checkmark" size={16} color="#888" />
+              )}
+            </View>
+          )}
         </View>
       </View>
+    );
+  };
 
-      {loadingMessages ? (
-        <View style={styles.loader}>
-          <ActivityIndicator size="large" color="#2196F3" />
-        </View>
-      ) : (
-        <KeyboardAvoidingView
-          style={styles.container}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          keyboardVerticalOffset={50}
+  // Get the appropriate data based on chat type
+  const currentMessages = isGroupChat ? groupMessages : messages;
+  const currentLoadingState = isGroupChat ? loadingGroupMessages : loadingMessages;
+  const isOnline = !isGroupChat && onlineUsers?.includes(id as string);
+
+  // Update the FlatList data source
+  return (
+    <View style={styles.container}>
+      <StatusBar backgroundColor="#075E54" barStyle="light-content" />
+
+      {/* Header remains the same */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          onPress={() => router.replace("/Chats")}
+          style={styles.backButton}
         >
-          {messages?.length === 0 ? (
-            <View style={styles.emptyChat}>
-              <Text style={styles.emptyChatText}>No messages yet. Say hello!</Text>
-            </View>
-          ) : (
-            <FlatList
-              ref={flatListRef}
-              data={messages}
-              keyExtractor={(item) => item._id}
-              renderItem={({ item }) => (
-                <View
-                  style={[
-                    styles.messageBubble,
-                    item.sender === currentUser?._id ? styles.myMessage : styles.theirMessage,
-                  ]}
-                >
-                  {item.text && <Text style={styles.messageText}>{item.text}</Text>}
-                
-                    {/* <Image
-                          source={{ uri:"https://images.pexels.com/photos/31416570/pexels-photo-31416570/free-photo-of-close-up-of-vibrant-red-ranunculus-flower.jpeg?auto=compress&cs=tinysrgb&w=600&lazy=load" }}
-                          crossOrigin="anonymous"
-                          style={styles.filePreview}
-                          resizeMode="cover"
-                          
-                        /> */}
-                 
-                  {item.fileUrl && (
-                    <View>
-                      {item.fileType ? (
-                        <Image
-                          source={{ uri:item.fileUrl }}
-                          // crossOrigin="anonymous"
-                          style={styles.filePreview}
-                          resizeMode="cover"
-                        />
-                      ) : (
-                        <TouchableOpacity
-                          style={styles.fileBox}
-                          onPress={() => Linking.openURL(item.fileUrl)}
-                        >
-                          <Ionicons name="document-outline" size={24} color="#2196F3" />
-                          <Text style={styles.fileName} numberOfLines={1} ellipsizeMode="middle">
-                            {item.fileName || "File attachment"}
-                          </Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  )}
+          <Ionicons name="arrow-back" size={24} color="white" />
+        </TouchableOpacity>
 
-                  {/* FIXED: Message status display */}
-                  <Text style={styles.messageStatus}>
-                    {item.timestamp 
-                  ? new Date(item.timestamp).toLocaleTimeString([], { 
-                      hour: '2-digit', 
-                      minute: '2-digit' 
-                    })
-                  : new Date().toLocaleTimeString([], { 
-                      hour: '2-digit', 
-                      minute: '2-digit' 
-                    })
-                }
-                    {/* Only show status for sent messages */}
-                     {item.sender === currentUser?._id && (
-                <View style={styles.statusTicks}>
-                  {item.status === 'sent' && (
-                    <Text style={[styles.tick, styles.singleTick]}>✓</Text>
-                  )}
-                  {item.status === 'delivered' && (
-                    <Text style={[styles.tick, styles.doubleTick]}>✓✓</Text>
-                  )}
-                  {item.status === 'read' && (
-                    <Text style={[styles.tick, styles.readTick]}>✓✓</Text>
-                  )}
-                </View>
-              )}
-                  </Text>
-                </View>
-              )}
-              contentContainerStyle={styles.messagesContainer}
-              onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-            />
-          )}
-
-          <ChatBox
-            input={input}
-            setInput={setInput}
-            onSend={handleSendMessage}
-            isSending={isSending}
-            showEmojiPicker={showEmojiPicker}
-            setShowEmojiPicker={setShowEmojiPicker}
-            // showEmojiPicker={false}
-            setDocumentUrl={setDocumentUrl}
-            // setShowEmojiPicker={() => {}}
+        <TouchableOpacity
+          onPress={handleProfileNavigation}
+          style={styles.profileButton}
+        >
+          <Image
+            source={{
+              uri: avatar?.toString() ||
+                `https://ui-avatars.com/api/?name=${encodeURIComponent(name as string)}&background=random`,
+            }}
+            style={styles.avatar}
           />
-        </KeyboardAvoidingView>
-      )}
-    </View>
-  );
+          <View style={styles.headerText}>
+            <Text style={styles.name} numberOfLines={1}>{name}</Text>
+            <Text style={styles.status}>
+              {isGroupChat
+                ? `${JSON.parse(members as string)?.length || 0} members`
+                : isOnline ? "Online" : "Offline"}
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        <View style={styles.headerIcons}>
+          <TouchableOpacity style={styles.roundIconButton}>
+            <Ionicons name="videocam" size={24} color="#3a1140" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.roundIconButton}>
+            <Ionicons name="call" size={24} color="#3a1140" />
+          </TouchableOpacity>
+
+        </View>
+        </View>
+
+        {currentLoadingState ? (
+          <View style={styles.loader}>
+            <ActivityIndicator size="large" color="#075E54" />
+          </View>
+        ) : (
+          <>
+            {currentMessages?.length === 0 ? (
+              <View style={styles.emptyChat}>
+                <Text style={styles.emptyChatText}>
+                  {isGroupChat
+                    ? "No messages in this group yet. Start the conversation!"
+                    : "No messages yet. Say hello!"}
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                ref={flatListRef}
+                data={currentMessages}
+                keyExtractor={(item) => item._id}
+                renderItem={renderMessageItem}
+                contentContainerStyle={styles.messagesContainer}
+                onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+                onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
+                showsVerticalScrollIndicator={false}
+              />
+            )}
+
+            <ChatBox
+              input={input}
+              setInput={setInput}
+              onSend={handleSendMessage}
+              isSending={isSending}
+              showEmojiPicker={showEmojiPicker}
+              setShowEmojiPicker={setShowEmojiPicker}
+              setDocumentUrl={() => { }}
+              isGroupChat={isGroupChat}
+            />
+          </>
+        )}
+      </View>
+      );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff"
+      const styles = StyleSheet.create({
+        container: {
+        flex: 1,
+      backgroundColor: '#e5ddd5',
   },
-  loader: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+      senderName: {
+        fontSize: 12,
+      fontWeight: '600',
+      color: '#666',
+      marginBottom: 4,
   },
-  emptyChat: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+      header: {
+        flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 10,
+      paddingVertical: 15,
+      backgroundColor: '#3a1140',
+      elevation: 4,
+      paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 50,
   },
-  emptyChatText: {
-    color: '#888',
-    fontSize: 16,
+      backButton: {
+        marginRight: 10,
   },
-  icon: {
-    marginHorizontal: 10,
+      profileButton: {
+        flexDirection: 'row',
+      alignItems: 'center',
+      flex: 1,
   },
-filePreview: {
-  width: 300,
-  height: 300,
-  borderRadius: 12,
-  marginTop: 10,
-  borderWidth: 1,
-  borderColor: '#ccc',
-  resizeMode: 'cover',
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.25,
-  shadowRadius: 4,
-  elevation: 5,
-  alignSelf: 'center',
-  backgroundColor: '#f9f9f9',
-}
-,
- 
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
-    marginBottom: 10,
-    marginTop: Platform.OS === 'ios' ? 45 : 10,
+      avatar: {
+        width: 40,
+      height: 40,
+      borderRadius: 20,
+      marginRight: 10,
   },
-  headerIcons: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    alignItems: "center",
-    marginLeft: "auto",
+      headerText: {
+        flex: 1,
   },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 10,
-    borderWidth: 1,
-    borderColor: "#ddd",
+      name: {
+        fontSize: 18,
+      fontWeight: 'bold',
+      color: 'white',
   },
-  avatarOnline: {
-    borderColor: "green",
-    borderWidth: 2,
+      status: {
+        fontSize: 14,
+      color: 'rgba(255,255,255,0.8)',
   },
-  headerText: {
-    justifyContent: "center",
+      headerIcons: {
+        flexDirection: 'row',
+      alignItems: 'center',
   },
-  name: {
-    fontSize: 18,
-    fontWeight: "bold"
+      roundIconButton: {
+        width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: '#dcf8c6', // Green shade
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginLeft: 8,
+      elevation: 2,
+      shadowColor: '#000',
+      shadowOffset: {width: 0, height: 1 },
+      shadowOpacity: 0.2,
+      shadowRadius: 1.41,
+ },
+      iconButton: {
+        marginLeft: 20,
   },
-  time: {
-    fontSize: 14,
-    color: "gray"
+      loader: {
+        flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: '#e5ddd5',
   },
-  onlineText: {
-    color: "green",
+      emptyChat: {
+        flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
   },
-  messagesContainer: {
-    padding: 10,
-    paddingBottom: 20,
+      emptyChatText: {
+        fontSize: 16,
+      color: '#888',
+      textAlign: 'center',
   },
-  messageBubble: {
-    maxWidth: "80%",
-    padding: 10,
-    marginVertical: 5,
-    borderRadius: 15,
+      messagesContainer: {
+        padding: 10,
+      paddingBottom: 20,
   },
-  myMessage: {
-    backgroundColor: "#DCF8C6",
-    alignSelf: "flex-end",
-    borderBottomRightRadius: 5,
+      messageBubble: {
+        maxWidth: '80%',
+      padding: 12,
+      marginVertical: 4,
+      borderRadius: 8,
   },
-  theirMessage: {
-    backgroundColor: "#eee",
-    alignSelf: "flex-start",
-    borderBottomLeftRadius: 5,
+      myMessage: {
+        backgroundColor: '#DCF8C6',
+      alignSelf: 'flex-end',
+      borderTopRightRadius: 0,
   },
-  messageText: {
-    fontSize: 16
+      theirMessage: {
+        backgroundColor: 'white',
+      alignSelf: 'flex-start',
+      borderTopLeftRadius: 0,
   },
-  // inputContainer: {
-  //   flexDirection: "row",
-  //   padding: 10,
-  //   borderTopWidth: 1,
-  //   borderTopColor: "#eee",
-  //   backgroundColor: "#fff",
-  //   alignItems: "center",
-  // },
-  input: {
-    flex: 1,
-    backgroundColor: "#f2f2f2",
-    borderRadius: 20,
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    maxHeight: 100,
+      messageText: {
+        fontSize: 16,
+      color: '#000',
   },
-  attachButton: {
-    paddingHorizontal: 8,
-    marginRight: 5,
+      fileContainer: {
+        marginTop: 8,
   },
-  sendButton: {
-    backgroundColor: "#2196F3",
-    borderRadius: 20,
-    width: 40,
-    height: 40,
-    justifyContent: "center",
-    alignItems: "center",
-    marginLeft: 10,
+      filePreview: {
+        width: 250,
+      height: 200,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: '#ddd',
   },
-  sendButtonDisabled: {
-    backgroundColor: "#b3d9ff",
+      fileBox: {
+        flexDirection: 'row',
+      alignItems: 'center',
+      padding: 10,
+      backgroundColor: '#f9f9f9',
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: '#ddd',
   },
-  backIcon: {
-    marginRight: 10,
+      fileName: {
+        marginLeft: 8,
+      fontSize: 14,
+      color: '#2196F3',
+      maxWidth: 200,
   },
-  emojiScrollView: {
-    maxHeight: 200,
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#ccc",
-    marginBottom: 10,
+      messageFooter: {
+        flexDirection: 'row',
+      justifyContent: 'flex-end',
+      alignItems: 'center',
+      marginTop: 4,
   },
-  emojiScrollContent: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "flex-start",
-    padding: 10,
+      messageTime: {
+        fontSize: 12,
+      color: '#666',
+      marginRight: 4,
   },
-  emojiItem: {
-    width: 40,
-    height: 40,
-    justifyContent: "center",
-    alignItems: "center",
-    margin: 5,
-    borderRadius: 20,
-    backgroundColor: "#f2f2f2",
-  },
-  emojiText: {
-    fontSize: 18,
-  },
-  fileBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 10,
-    backgroundColor: "#f9f9f9",
-    borderRadius: 10,
-    marginVertical: 5,
-  },
-  fileName: {
-    fontSize: 14,
-    color: "#2196F3",
-    marginTop: 5,
-    textAlign: "center",
-  },
-  messageStatus: {
-    fontSize: 11,
-    color: '#666',
-    marginRight: 4,
-  },
-  
-  statusTicks: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  
-  tick: {
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  
-  singleTick: {
-    color: '#999', // Gray for sent
-  },
-  
-  doubleTick: {
-    color: '#999', // Gray for delivered
-  },
-  
-  readTick: {
-    color: '#4CAF50', // Green/blue for read
+      statusIndicator: {
+        marginLeft: 4,
   },
 });
-

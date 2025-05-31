@@ -611,13 +611,13 @@
 // });
 
 
-import React, { useEffect, useState } from 'react';
-import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useLocalSearchParams } from 'expo-router';
 import axios from 'axios';
 import * as ImagePicker from 'expo-image-picker';
-import { MaterialIcons } from '@expo/vector-icons';
+import { useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export default function ProfileScreen() {
   const [userData, setUserData] = useState<any>(null);
@@ -713,44 +713,111 @@ export default function ProfileScreen() {
       aspect: [1, 1],
       quality: 0.8,
     });
-
+    console.log("result", result)
     if (!result.canceled && result.assets[0]) {
-      await uploadImage(result.assets[0].uri);
+
+      await uploadImage(result.assets[0]);
     }
   };
 
-  const uploadImage = async (uri: string) => {
+  // const uploadImage = async (uri: string) => {
+  //   setUploading(true);
+
+  //   try {
+  //     const filename = uri.split('/').pop() || 'profile.jpg';
+  //     const match = /\.(\w+)$/.exec(filename);
+  //     const type = match ? `image/${match[1]}` : 'image/jpeg';
+
+  //     const formData = new FormData();
+  //     // Create a proper file object
+  //     formData.append('profilePicture', {
+  //       uri,
+  //       name: filename,
+  //       type,
+  //     } as any); // Still need 'as any' for React Native
+
+  //     const token = await AsyncStorage.getItem("token");
+  //     const response = await axios.put(
+  //       'http://localhost:3000/users/update-profile',
+  //       formData,
+  //       {
+  //         headers: {
+  //           'Content-Type': 'multipart/form-data',
+  //           'Authorization': `Bearer ${token}`,
+  //         },
+  //       }
+  //     );
+
+  //     // Use the response data from server instead of local URI
+  //     const updatedUser = {
+  //       ...userData,
+  //       profilePicture: response.data.profilePicture // or whatever field the server returns
+  //     };
+
+  //     setUserData(updatedUser);
+  //     await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+
+  //     Alert.alert("Success", "Profile image updated successfully");
+  //   } catch (error) {
+  //     console.error("Upload error:", error);
+  //     Alert.alert("Error", "Failed to update profile image");
+  //   } finally {
+  //     setUploading(false);
+  //   }
+  // };
+  const uploadImage = async (file: any) => {
     setUploading(true);
 
     try {
-      const filename = uri.split('/').pop() || 'profile.jpg';
-      const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : 'image/jpeg';
+      // Get the image file (similar to document picker approach)
+      // const response = await fetch(uri);
+      // const blob = await response.blob();
+
+      // // Extract filename from URI
+      // const filename = uri.split('/').pop() || 'profile.jpg';
+      // const mimeType = blob.type || 'image/jpeg';
+      // console.log("Uploading image:", { uri, filename });
+      // // Create FormData and append the blob
+      // const formData = new FormData();
+      // // formData.append('profilePicture', blob,filename);
+      // formData.append('file', {
+      //   uri,
+      //   name: filename,
+      //   type: mimeType,
+      // } as any);
+      const response = await fetch(file.uri);
+      const blob = await response.blob();
+      console.log("file", file);
+
 
       const formData = new FormData();
-      // Create a proper file object
-      formData.append('profilePicture', {
-        uri,
-        name: filename,
-        type,
-      } as any); // Still need 'as any' for React Native
+      formData.append("file", blob, file.name || "profile");
 
       const token = await AsyncStorage.getItem("token");
-      const response = await axios.put(
-        'http://localhost:3000/users/update-profile',
-        formData,
+
+      // Use fetch instead of axios for consistency
+      const uploadResponse = await fetch(
+        'http://192.168.29.187:3000/users/update-profile',
         {
+          method: 'PUT',
+          body: formData,
           headers: {
-            'Content-Type': 'multipart/form-data',
             'Authorization': `Bearer ${token}`,
+            // Let the browser set Content-Type with boundary
           },
         }
       );
 
-      // Use the response data from server instead of local URI
+      if (!uploadResponse.ok) {
+        throw new Error('Upload failed');
+      }
+
+      const result = await uploadResponse.json();
+
+      // Update user data with server response
       const updatedUser = {
         ...userData,
-        profilePicture: response.data.profilePicture // or whatever field the server returns
+        profilePicture: result.profilePicture // Adjust according to your API response
       };
 
       setUserData(updatedUser);
@@ -758,13 +825,23 @@ export default function ProfileScreen() {
 
       Alert.alert("Success", "Profile image updated successfully");
     } catch (error) {
-      console.error("Upload error:", error);
+      // console.error("Upload error:", error);
       Alert.alert("Error", "Failed to update profile image");
     } finally {
       setUploading(false);
     }
   };
-
+  useEffect(() => {
+    const fn = async () => {
+      const userString = await AsyncStorage.getItem('user');
+      if (userString) {
+        console.log("user profile", JSON.parse(userString));
+      } else {
+        console.log("user profile: null");
+      }
+    }
+    fn()
+  }, [])
 
 
   if (loading) {
@@ -775,6 +852,8 @@ export default function ProfileScreen() {
       </View>
     );
   }
+
+  console.log(userData,"userData")
 
   if (!userData) {
     return (
@@ -792,17 +871,33 @@ export default function ProfileScreen() {
           style={styles.imageContainer}
 
         >
-
           <Image
-            source={{
-              uri: userData.profilePicture
-                ? userData.profilePicture.startsWith('http')
-                  ? userData.profilePicture
-                  : userData.profilePicture
-                : `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.name)}&background=random&length=1`,
-            }}
+            source={{ uri: userData.profilePicture ? userData.profilePicture : `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.name)}&background=random&length=1` }}
             style={styles.profileImage}
           />
+
+          {/* {item.fileUrl && (
+                              <View>
+                                {item.fileType ? (
+                                  <Image
+                                    source={{ uri:item.fileUrl }}
+                                    // crossOrigin="anonymous"
+                                    style={styles.filePreview}
+                                    resizeMode="cover"
+                                  />
+                                ) : (
+                                  <TouchableOpacity
+                                    style={styles.fileBox}
+                                    onPress={() => Linking.openURL(item.fileUrl)}
+                                  >
+                                    <Ionicons name="document-outline" size={24} color="#2196F3" />
+                                    <Text style={styles.fileName} numberOfLines={1} ellipsizeMode="middle">
+                                      {item.fileName || "File attachment"}
+                                    </Text>
+                                  </TouchableOpacity>
+                                )}
+                              </View>
+                            )} */}
 
           <View style={styles.cameraIconContainer}>
             <MaterialIcons name="photo-camera" size={20} color="white" />
@@ -852,7 +947,8 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   container: {
-    padding: 20,
+
+    padding: 10,
     backgroundColor: '#fff',
     alignItems: 'stretch',
   },

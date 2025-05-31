@@ -1,11 +1,15 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, KeyboardAvoidingView } from 'react-native';
 import { Ionicons } from "@expo/vector-icons";
+import { SafeAreaView } from 'react-native-safe-area-context';
+
 import { Provider as PaperProvider } from 'react-native-paper';
 
 const TabRoot = () =>  {
   return (
+  <SafeAreaView style={{ flex: 1 }}>
+    <KeyboardAvoidingView></KeyboardAvoidingView>
     <PaperProvider>
     <Tabs
     // screenOptions={{
@@ -25,8 +29,7 @@ const TabRoot = () =>  {
 
         if (route.name === "Chats") iconName = "chatbubble";
         else if (route.name === "Updates") iconName = "sync";
-        else if (route.name === "Communities") iconName = "people";
-        else if (route.name === "calls") iconName = "call";
+        else if (route.name === "Calls") iconName = "call";
 
         return <Ionicons name={iconName} size={22} color={color} />;
       },
@@ -43,7 +46,7 @@ const TabRoot = () =>  {
         <Tabs.Screen name="RegisterScreen" options={{title:"RegisterScreen"}}/>
         <Tabs.Screen name="Chats" options={{title:"Chats"}}/>
         <Tabs.Screen name="Updates" options={{title:"Updates"}}/>
-        <Tabs.Screen name="Communities" options={{title:"Communities"}}/>
+        <Tabs.Screen name="Calls" options={{title:"Calls"}}/>
         <Tabs.Screen name="ProfileScreen" options={{title:"ProfileScreen"}}/>
 
         
@@ -51,6 +54,7 @@ const TabRoot = () =>  {
     </View>
     </Tabs>
     </PaperProvider>
+    </SafeAreaView>
   );
 }
 

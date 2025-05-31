@@ -1,12 +1,12 @@
 import React from 'react';
 import { View, Text } from 'react-native';
 
-const Communities = () => {
+const Calls = () => {
   return (
     <View>
-      <Text>Communities</Text>
+      <Text>Calls</Text>
     </View>
   );
 }
 
-export default Communities;
+export default Calls;

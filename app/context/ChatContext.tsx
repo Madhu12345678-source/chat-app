@@ -288,6 +288,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           fileName: file?.name || `file-${Date.now()}`,
           fileType: file?.type || getMimeType(file?.name || ''),
         }
+        console.log('Files new:', filesnew);
 
         const messagePayload = {
           senderId: currentUser._id,

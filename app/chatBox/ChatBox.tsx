@@ -19,9 +19,9 @@ import {
 import * as Camera from "expo-camera";
 import * as FileSystem from 'expo-file-system';
 // import { Audio } from "expo-av";
-import axios from "axios";
 import AttachmentModal from "../attachement/Attachement";
 import { useChat } from "../context/ChatContext";
+import { useGroup } from "../context/GroupContext";
 
 interface Props {
   input: string;
@@ -31,7 +31,8 @@ interface Props {
   showEmojiPicker: boolean;
   setShowEmojiPicker: (show: boolean) => void;
   setDocumentUrl: (url: string) => void;
-   onSendWithFile?: (file: { uri: string; name: string; type: string }) => void; // Add this prop
+  onSendWithFile?: (file: { uri: string; name: string; type: string }) => void; // Add this prop
+  isGroupChat?: boolean; // Optional prop to check if it's a group chat
 }
 
 const emojiList: string[] = emoji.names.map((name: string) => emoji.getUnicode(name));
@@ -45,6 +46,7 @@ export default function ChatBox({
   // setShowEmojiPicker,
 setDocumentUrl,
  onSendWithFile, // Add this prop
+ isGroupChat = false, // Optional prop to check if it's a group chat
 }: Props) {
 
   const [selectedDocument, setSelectedDocument] = useState<any>(null);
@@ -53,6 +55,7 @@ setDocumentUrl,
      const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
      const {sendMessage} = useChat();
+     const {sendGroupMessage} = useGroup();
 
 
   const API_BASE_URL = Platform.select({
@@ -200,6 +203,7 @@ setDocumentUrl,
             if (!docResult.canceled && docResult.assets?.[0]) {
               const file = docResult.assets[0];
               
+              
               // Convert to Blob first
               const response = await fetch(file.uri);
               const blob = await response.blob();
@@ -207,7 +211,7 @@ setDocumentUrl,
               const formData =new FormData();
               formData.append("file", blob, file.name || "document");
               
-              const uploadResponse = await fetch("http://localhost:3000/upload/file", {
+              const uploadResponse = await fetch("http://192.168.29.187:3000/upload/file", {
                 method: "POST",
                 body: formData,
                 // headers: {
@@ -226,9 +230,14 @@ setDocumentUrl,
                 type: result.fileType || "application/octet-stream",
               }
 
-              await sendMessage("", files);
+              if(isGroupChat){
+                sendGroupMessage("", files);
+              }else{
 
-              console.log("Upload success:", result);
+                await sendMessage("", files);
+              }
+
+              
               Alert.alert("Success", "Document uploaded!");
             }
             break;
@@ -306,7 +315,7 @@ setDocumentUrl,
 const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: "row",
-    padding: 10,
+    padding: 30,
     borderTopWidth: 1,
     borderTopColor: "#eee",
     backgroundColor: "#fff",

@@ -11,8 +11,9 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [isCurrentUser, setIsCurrentUser] = useState(false);
-  const { id, name, avatar, time, gender } = useLocalSearchParams();
-  
+  const { id, name, avatar, time, gender, isGroup, members, description } = useLocalSearchParams();
+  console.log('id:', id, 'name:', name, 'avatar:', avatar, 'time:', time);
+
   useEffect(() => {
     const checkCurrentUser = async () => {
       try {
@@ -33,7 +34,7 @@ export default function ProfileScreen() {
     const fetchUserDetails = async () => {
       try {
         const token = await AsyncStorage.getItem("token");
-        const res = await axios.get(`http://localhost:3000/users`, {
+        const res = await axios.get(`http://192.168.29.187:3000/users`, {
           headers: { Authorization: `Bearer ${token}` },
         });
 
@@ -83,81 +84,8 @@ export default function ProfileScreen() {
     loadUserData();
   }, [id, name, avatar, time, gender]);
 
-  // ProfileScreen.tsx
-const pickImage = async () => {
- 
-  // Request permissions
-  const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (status !== 'granted') {
-    Alert.alert('Permission required', 'We need camera roll permissions to upload images');
-    return;
-  }
 
-  // Launch image picker
-  let result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ImagePicker.MediaTypeOptions.Images,
-    allowsEditing: true,
-    aspect: [1, 1],
-    quality: 0.8,
-  });
 
-  if (!result.canceled && result.assets[0]) {
-    await uploadImage(result.assets[0].uri);
-  }
-};
-
-const uploadImage = async (uri: string) => {
-  setUploading(true);
-  
-  try {
-    // Prepare the file for upload
-    const filename = uri.split('/').pop() || 'profile.jpg';
-    const match = /\.(\w+)$/.exec(filename);
-    const type = match ? `image/${match[1]}` : 'image/jpeg';
-
-    const formData = new FormData();
-    formData.append('profileImage', {
-      uri,
-      name: filename,
-      type,
-    } as any);
-
-    // Add other user data
-    formData.append('name', userData.name);
-    if (userData.nickname) formData.append('nickname', userData.nickname);
-    if (userData.phone) formData.append('phone', userData.phone);
-    if (userData.bio) formData.append('bio', userData.bio);
-    if (userData.gender) formData.append('gender', userData.gender);
-
-    const token = await AsyncStorage.getItem("token");
-    const response = await axios.put(
-      'http://localhost:3000/users/update-profile',
-      formData,
-      {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          'Authorization': `Bearer ${token}`,
-        },
-      }
-    );
-
-    // Update local state
-    const updatedUser = { ...userData, profileImage: uri };
-    setUserData(updatedUser);
-    
-    // Update AsyncStorage if this is the current user's profile
-    await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
-
-    Alert.alert("Success", "Profile image updated successfully");
-  } catch (error) {
-    console.error("Upload error:", error);
-    Alert.alert("Error", "Failed to update profile image");
-  } finally {
-    setUploading(false);
-  }
-};
-
- 
 
   if (loading) {
     return (
@@ -179,27 +107,15 @@ const uploadImage = async (uri: string) => {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.profileContainer}>
-        {/* <TouchableOpacity 
-          onPress={pickImage} 
-          style={styles.imageContainer}
-         
-        >
-         */}
-            <Image
-              source={{
-                uri: userData.profileImage
-                  ? userData.profileImage
-                  : `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.name)}&background=random&length=1`,
-              }}
-              style={styles.profileImage}
-            />
-          
-          {/* <View style={styles.cameraIconContainer}>
-            <MaterialIcons name="photo-camera" size={20} color="white" />
-          </View> */}
-        {/* </TouchableOpacity> */}
+        <Image
+          source={{
+            uri: userData.profilePicture
+              ? userData.profilePicture
+              : `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.name)}&background=random&length=1`,
+          }}
+          style={styles.profilePicture}
+        /> 
       </View>
-
       <View style={styles.infoCard}>
         <Text style={styles.label}>Name</Text>
         <Text style={styles.value}>{userData.name}</Text>
@@ -242,6 +158,7 @@ const uploadImage = async (uri: string) => {
 
 const styles = StyleSheet.create({
   container: {
+    flexGrow: 1,
     padding: 20,
     backgroundColor: '#fff',
     alignItems: 'stretch',
@@ -263,9 +180,9 @@ const styles = StyleSheet.create({
   imageContainer: {
     position: 'relative',
   },
-  profileImage: {
-    width: 150,
-    height: 150,
+  profilePicture: {
+    width: 100,
+    height: 100,
     borderRadius: 75,
     borderWidth: 1,
     borderColor: '#C2185B',
